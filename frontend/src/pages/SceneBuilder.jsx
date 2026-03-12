@@ -11,11 +11,12 @@ import {
   FiRefreshCw,
   FiSave,
   FiPlay,
-  FiEye
+  FiEye,
+  FiPlus,
+  FiMinus
 } from 'react-icons/fi';
 import { patientAPI, sessionAPI, sceneAPI } from '../services/api';
 import ScenePreview from '../components/ScenePreview';
-import SessionForm from '../components/SessionForm';
 import toast from 'react-hot-toast';
 
 const SceneBuilder = () => {
@@ -29,7 +30,9 @@ const SceneBuilder = () => {
   const [sessionConfig, setSessionConfig] = useState({
     phobia: 'arachnophobia',
     intensity: 5,
-    environment: 'indoor'
+    environment: 'indoor-room',
+    objectCounts: { triggers: 3, ambient: 5 },
+    customInstructions: ''
   });
   const [sceneJSON, setSceneJSON] = useState(null);
   const [previewURL, setPreviewURL] = useState(null);
@@ -94,7 +97,9 @@ const SceneBuilder = () => {
       const response = await sceneAPI.generate({
         phobia: sessionConfig.phobia,
         intensity: sessionConfig.intensity,
-        environment: sessionConfig.environment
+        environment: sessionConfig.environment,
+        objectCounts: sessionConfig.objectCounts,
+        customInstructions: sessionConfig.customInstructions
       });
       
       setSceneJSON(response.data.sceneJSON);
@@ -152,6 +157,17 @@ const SceneBuilder = () => {
   // Handle form changes
   const handleConfigChange = (field, value) => {
     setSessionConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Handle object count changes
+  const handleObjectCountChange = (field, delta) => {
+    setSessionConfig(prev => ({
+      ...prev,
+      objectCounts: {
+        ...prev.objectCounts,
+        [field]: Math.max(0, Math.min(20, prev.objectCounts[field] + delta))
+      }
+    }));
   };
 
   return (
@@ -218,10 +234,131 @@ const SceneBuilder = () => {
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Session Configuration
             </h2>
-            <SessionForm
-              config={sessionConfig}
-              onChange={handleConfigChange}
-            />
+            
+            {/* Phobia Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Phobia Type</label>
+              <select
+                value={sessionConfig.phobia}
+                onChange={(e) => handleConfigChange('phobia', e.target.value)}
+                className="form-select"
+              >
+                <option value="arachnophobia">Arachnophobia (Spiders)</option>
+                <option value="acrophobia">Acrophobia (Heights)</option>
+                <option value="claustrophobia">Claustrophobia (Confined Spaces)</option>
+                <option value="social-anxiety">Social Anxiety</option>
+                <option value="glossophobia">Glossophobia (Public Speaking)</option>
+                <option value="aviophobia">Aviophobia (Flying)</option>
+                <option value="cynophobia">Cynophobia (Dogs)</option>
+                <option value="ophidiophobia">Ophidiophobia (Snakes)</option>
+              </select>
+            </div>
+
+            {/* Environment Selection */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Environment</label>
+              <select
+                value={sessionConfig.environment}
+                onChange={(e) => handleConfigChange('environment', e.target.value)}
+                className="form-select"
+              >
+                <option value="indoor-room">Indoor Room</option>
+                <option value="outdoor-park">Outdoor Park</option>
+                <option value="office">Office</option>
+                <option value="elevator">Elevator</option>
+                <option value="rooftop">Rooftop</option>
+                <option value="bridge">Bridge</option>
+                <option value="forest">Forest</option>
+                <option value="presentation-room">Presentation Room</option>
+              </select>
+            </div>
+
+            {/* Intensity Slider */}
+            <div className="mb-4">
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium text-gray-700">Intensity Level</label>
+                <span className={`text-sm font-semibold ${
+                  sessionConfig.intensity <= 3 ? 'text-green-600' :
+                  sessionConfig.intensity <= 6 ? 'text-yellow-600' : 'text-red-600'
+                }`}>
+                  {sessionConfig.intensity}/10 ({sessionConfig.intensity <= 3 ? 'Low' : sessionConfig.intensity <= 6 ? 'Medium' : 'High'})
+                </span>
+              </div>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                value={sessionConfig.intensity}
+                onChange={(e) => handleConfigChange('intensity', parseInt(e.target.value))}
+                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+              />
+              <div className="flex justify-between text-xs text-gray-400 mt-1">
+                <span>Minimal</span>
+                <span>Moderate</span>
+                <span>Maximum</span>
+              </div>
+            </div>
+
+            {/* Object Counts */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Scene Objects</label>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-2">Trigger Objects</p>
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => handleObjectCountChange('triggers', -1)}
+                      className="p-1 bg-white rounded border hover:bg-gray-100"
+                    >
+                      <FiMinus className="w-4 h-4" />
+                    </button>
+                    <span className="text-xl font-semibold">{sessionConfig.objectCounts.triggers}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleObjectCountChange('triggers', 1)}
+                      className="p-1 bg-white rounded border hover:bg-gray-100"
+                    >
+                      <FiPlus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3">
+                  <p className="text-xs text-gray-600 mb-2">Ambient Objects</p>
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={() => handleObjectCountChange('ambient', -1)}
+                      className="p-1 bg-white rounded border hover:bg-gray-100"
+                    >
+                      <FiMinus className="w-4 h-4" />
+                    </button>
+                    <span className="text-xl font-semibold">{sessionConfig.objectCounts.ambient}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleObjectCountChange('ambient', 1)}
+                      className="p-1 bg-white rounded border hover:bg-gray-100"
+                    >
+                      <FiPlus className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Custom Instructions */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Custom Scene Instructions</label>
+              <textarea
+                value={sessionConfig.customInstructions}
+                onChange={(e) => handleConfigChange('customInstructions', e.target.value)}
+                placeholder="Add specific instructions for the AI scene generator...&#10;&#10;Examples:&#10;• Place spiders near the window&#10;• Add calming background music&#10;• Include an exit door that's always visible&#10;• Make the lighting dim but not scary"
+                className="form-textarea w-full h-32 text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">
+                These instructions will guide the AI when generating your scene.
+              </p>
+            </div>
           </div>
 
           {/* Generate Button */}
@@ -267,6 +404,8 @@ const SceneBuilder = () => {
             )}
           </div>
 
+
+{/* remove after testong */}
           {/* Scene JSON */}
           {sceneJSON && (
             <div className="card">

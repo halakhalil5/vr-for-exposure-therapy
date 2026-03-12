@@ -12,6 +12,7 @@ const unityService = require('../services/unityService');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const axios = require("axios");
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'previews');
@@ -48,13 +49,40 @@ const generateScene = asyncHandler(async (req, res) => {
 
   try {
     // Generate scene using LLM service
-    const sceneJSON = await llmService.generateSceneConfiguration({
-      phobia,
-      intensity: parseInt(intensity),
-      environment,
-      objectCounts: objectCounts || {},
-      customInstructions: customInstructions || ''
-    });
+    const prompt = `Generate a VR exposure therapy scene as JSON only. No explanation.
+
+Phobia: ${phobia}
+Environment: ${environment}
+Intensity: ${intensity}/10
+${objectCounts ? `Objects: ${objectCounts.triggers || 3} triggers, ${objectCounts.ambient || 5} ambient` : ''}
+${customInstructions ? `Instructions: ${customInstructions}` : ''}
+
+JSON format:
+{
+  "environment": {"type": "string", "size": "medium", "ambiance": "neutral"},
+  "lighting": {"brightness": 0.7, "color": "#ffffff"},
+  "objects": [{"id": "obj1", "type": "string", "position": [0,0,5], "scale": 1.0}]
+}
+
+Return ONLY the JSON, no other text.`;
+
+console.log('📤 Sending prompt to Ollama...');
+const ollamaResponse = await axios.post("http://localhost:11434/api/generate", {
+  model: "llama3",
+  prompt: prompt,
+  stream: false
+}, {
+  timeout: 90000 // 90 seconds timeout for LLM
+});
+console.log('✅ Ollama response received');
+
+const rawOutput = ollamaResponse.data.response;
+
+// Extract JSON safely
+const jsonStart = rawOutput.indexOf("{");
+const jsonEnd = rawOutput.lastIndexOf("}") + 1;
+
+const sceneJSON = JSON.parse(rawOutput.substring(jsonStart, jsonEnd));
 
     // If sessionId provided, update the session
     let session = null;

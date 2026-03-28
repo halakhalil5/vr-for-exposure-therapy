@@ -83,6 +83,14 @@ const SessionManagement = () => {
     return `badge ${styles[status] || 'bg-gray-100 text-gray-600'}`;
   };
 
+  const formatTemplateName = (templateId) => {
+    if (!templateId) return '';
+    return templateId
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
   return (
     <div className="space-y-6">
       {/* Page Header */}
@@ -195,7 +203,7 @@ const SessionManagement = () => {
                       {session.patientId?.name || 'Unknown Patient'}
                     </h3>
                     <p className="text-sm text-gray-500 mt-1">
-                      {session.phobia} • {session.environment} • 
+                      {session.phobia} • {formatTemplateName(session.sceneTemplate) || session.environment} • 
                       Intensity {session.intensity}/10
                     </p>
                     <div className="flex items-center space-x-3 mt-2">

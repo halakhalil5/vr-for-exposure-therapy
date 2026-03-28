@@ -101,7 +101,10 @@ const sessionSchema = new mongoose.Schema({
         'elevator',          // Elevator/small space
         'rooftop',           // High building rooftop
         'bridge',            // Bridge or overpass
+        'cliff-edge',        // Cliff edge environment
+        'cave',              // Cave environment
         'airplane',          // Inside airplane
+        'airport',           // Airport terminal
         'forest',            // Forest environment
         'beach',             // Beach setting
         'city-street',       // Urban street
@@ -110,6 +113,27 @@ const sessionSchema = new mongoose.Schema({
         'custom'             // Custom environment
       ]
     }
+  },
+
+  // Therapist-selected scene template
+  sceneTemplate: {
+    type: String,
+    enum: [
+      'living-room',
+      'road-with-skyscrappers',
+      'rooftop',
+      'cliff-edge',
+      'cave',
+      'elevator',
+      'airplane',
+      'airport'
+    ]
+  },
+
+  // Therapist-written scene description for LLM guidance
+  sceneDescription: {
+    type: String,
+    maxlength: [1000, 'Scene description cannot exceed 1000 characters']
   },
   
   // Complete scene configuration in JSON format
@@ -206,7 +230,7 @@ const sessionSchema = new mongoose.Schema({
   
   // Therapist notes for the session
   therapistNotes: {
-    preSessi: String,  // Notes before session
+    preSession: String, // Notes before session
     during: String,     // Notes during session
     postSession: String // Notes after session
   },

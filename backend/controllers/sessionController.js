@@ -9,6 +9,17 @@ const Session = require('../models/Session');
 const Patient = require('../models/Patient');
 const { asyncHandler, ApiError } = require('../middleware/errorHandler');
 
+const TEMPLATE_TO_ENVIRONMENT = {
+  'living-room': 'indoor-room',
+  'road-with-skyscrappers': 'city-street',
+  rooftop: 'rooftop',
+  'cliff-edge': 'cliff-edge',
+  cave: 'cave',
+  elevator: 'elevator',
+  airplane: 'airplane',
+  airport: 'airport'
+};
+
 /**
  * Get all sessions
  * GET /api/sessions
@@ -84,15 +95,17 @@ const createSession = asyncHandler(async (req, res) => {
     patientId,
     phobia,
     intensity,
+    sceneTemplate,
     environment,
+    sceneDescription,
     sceneJSON,
     scheduledDate,
     therapistNotes
   } = req.body;
 
   // Validate required fields
-  if (!patientId || !phobia || !intensity || !environment) {
-    throw new ApiError('Patient ID, phobia, intensity, and environment are required', 400);
+  if (!patientId || !intensity) {
+    throw new ApiError('Patient ID and intensity are required', 400);
   }
 
   // Verify patient exists
@@ -101,19 +114,30 @@ const createSession = asyncHandler(async (req, res) => {
     throw new ApiError('Patient not found', 404);
   }
 
+  const resolvedEnvironment = sceneTemplate
+    ? TEMPLATE_TO_ENVIRONMENT[sceneTemplate]
+    : environment;
+
+  if (!resolvedEnvironment) {
+    throw new ApiError('A valid scene template or environment is required', 400);
+  }
+
+  // Phobia is always taken from patient registration to avoid mismatches.
+  const resolvedPhobia = patient.phobia || phobia;
+  if (!resolvedPhobia) {
+    throw new ApiError('Patient phobia is required before creating a session', 400);
+  }
+
   // Create session with initial configuration
   const session = new Session({
     patientId,
-    phobia,
+    phobia: resolvedPhobia,
     intensity: parseInt(intensity),
-    environment,
+    environment: resolvedEnvironment,
+    sceneTemplate,
+    sceneDescription,
     sceneJSON: sceneJSON || {
-      environment: {
-        type: environment,
-        lighting: { type: 'natural', intensity: 1, color: '#FFFFFF' },
-        weather: { type: 'clear', intensity: 0 },
-        ambientSounds: []
-      },
+      environment: resolvedEnvironment,
       objects: [],
       triggers: [],
       camera: {
@@ -156,9 +180,18 @@ const updateSession = asyncHandler(async (req, res) => {
   }
 
   const allowedUpdates = [
-    'phobia', 'intensity', 'environment', 'sceneJSON',
+    'intensity', 'environment', 'sceneTemplate', 'sceneDescription', 'sceneJSON',
     'scheduledDate', 'status', 'therapistNotes', 'duration'
   ];
+
+  if (req.body.sceneTemplate && TEMPLATE_TO_ENVIRONMENT[req.body.sceneTemplate]) {
+    session.environment = TEMPLATE_TO_ENVIRONMENT[req.body.sceneTemplate];
+  }
+
+  const patient = await Patient.findById(session.patientId).select('phobia');
+  if (patient?.phobia) {
+    session.phobia = patient.phobia;
+  }
 
   for (const key of allowedUpdates) {
     if (req.body[key] !== undefined) {

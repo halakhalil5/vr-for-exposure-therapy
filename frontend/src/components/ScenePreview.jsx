@@ -171,7 +171,7 @@ const ScenePreview = ({
         )}
 
         {/* Send to Unity */}
-        {onSendToUnity && sceneJSON && !previewURL && (
+        {onSendToUnity && sceneJSON && (
           <button
             onClick={onSendToUnity}
             className="btn-primary flex items-center space-x-2 text-sm"

@@ -11,6 +11,100 @@ const axios = require('axios');
 const UNITY_SERVER_URL = process.env.UNITY_SERVER_URL || 'http://localhost:8080';
 const UNITY_TIMEOUT = 60000; // 60 seconds for scene building
 
+// Map API environment IDs to Unity environment IDs.
+const UNITY_ENVIRONMENT_MAP = {
+  'indoor-room': 'living_room',
+  'outdoor-park': 'outdoor_park',
+  office: 'office_space',
+  elevator: 'elevator',
+  rooftop: 'rooftop',
+  bridge: 'bridge',
+  'cliff-edge': 'cliff_edge',
+  cave: 'cave',
+  airplane: 'airplane',
+  airport: 'airport',
+  forest: 'forest',
+  beach: 'beach',
+  'city-street': 'city_street',
+  'medical-office': 'medical_office',
+  'presentation-room': 'presentation_room',
+  custom: 'custom'
+};
+
+const normalizeEnvironmentForUnity = (environment) => {
+  if (!environment) return 'custom';
+
+  if (typeof environment === 'object') {
+    const envType = environment.type || environment.id || environment.name;
+    return UNITY_ENVIRONMENT_MAP[envType] || String(envType || 'custom').replace(/-/g, '_');
+  }
+
+  return UNITY_ENVIRONMENT_MAP[environment] || String(environment).replace(/-/g, '_');
+};
+
+const toVector3 = (value, fallback = { x: 0, y: 0, z: 0 }) => {
+  if (Array.isArray(value)) {
+    return {
+      x: Number(value[0] ?? fallback.x),
+      y: Number(value[1] ?? fallback.y),
+      z: Number(value[2] ?? fallback.z)
+    };
+  }
+
+  if (value && typeof value === 'object') {
+    return {
+      x: Number(value.x ?? fallback.x),
+      y: Number(value.y ?? fallback.y),
+      z: Number(value.z ?? fallback.z)
+    };
+  }
+
+  return { ...fallback };
+};
+
+const normalizeSceneObject = (obj = {}) => {
+  const normalized = {
+    ...obj,
+    position: toVector3(obj.position)
+  };
+
+  if (obj.rotation !== undefined) {
+    normalized.rotation = toVector3(obj.rotation);
+  }
+
+  if (obj.scale !== undefined) {
+    if (typeof obj.scale === 'number') {
+      normalized.scale = { x: obj.scale, y: obj.scale, z: obj.scale };
+    } else {
+      normalized.scale = toVector3(obj.scale, { x: 1, y: 1, z: 1 });
+    }
+  }
+
+  return normalized;
+};
+
+const normalizeSceneForUnity = (sceneJSON = {}) => {
+  const camera = sceneJSON.camera || {};
+  const startPosition = camera.startPosition || { x: 0, y: 1.6, z: 0 };
+
+  return {
+    environment: normalizeEnvironmentForUnity(sceneJSON.environment),
+    objects: Array.isArray(sceneJSON.objects)
+      ? sceneJSON.objects.map(normalizeSceneObject)
+      : [],
+    triggers: Array.isArray(sceneJSON.triggers)
+      ? sceneJSON.triggers.map((trigger) => ({
+          ...trigger,
+          position: toVector3(trigger.position)
+        }))
+      : [],
+    camera: {
+      startPosition: toVector3(startPosition, { x: 0, y: 1.6, z: 0 }),
+      allowMovement: camera.allowMovement !== undefined ? Boolean(camera.allowMovement) : true
+    }
+  };
+};
+
 /**
  * Send scene configuration to Unity for building
  * 
@@ -20,11 +114,13 @@ const UNITY_TIMEOUT = 60000; // 60 seconds for scene building
 const sendSceneToUnity = async (sceneJSON) => {
   try {
     console.log(`📤 Sending scene to Unity at ${UNITY_SERVER_URL}`);
+    const normalizedScene = normalizeSceneForUnity(sceneJSON);
+    console.log('   Unity environment:', normalizedScene.environment);
     
     const response = await axios.post(
       `${UNITY_SERVER_URL}/build-scene`,
       {
-        scene: sceneJSON,
+        scene: normalizedScene,
         timestamp: new Date().toISOString(),
         requestPreview: true
       },

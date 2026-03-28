@@ -84,6 +84,14 @@ const SessionDetail = () => {
     return `badge ${styles[status] || 'bg-gray-100 text-gray-600'}`;
   };
 
+  const formatTemplateName = (templateId) => {
+    if (!templateId) return '-';
+    return templateId
+      .split('-')
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -191,10 +199,23 @@ const SessionDetail = () => {
               <p className="font-medium capitalize">{session.environment}</p>
             </div>
             <div>
+              <p className="text-sm text-gray-500">Template</p>
+              <p className="font-medium">{formatTemplateName(session.sceneTemplate)}</p>
+            </div>
+            <div>
               <p className="text-sm text-gray-500">Duration</p>
               <p className="font-medium">{session.duration || '-'} min</p>
             </div>
           </div>
+
+          {session.sceneDescription && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="text-sm text-gray-500">Scene Description</p>
+              <p className="text-sm text-gray-700 mt-1 whitespace-pre-wrap">
+                {session.sceneDescription}
+              </p>
+            </div>
+          )}
 
           {/* Patient Feedback */}
           {session.patientFeedback && (

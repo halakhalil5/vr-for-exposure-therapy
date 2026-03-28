@@ -11,13 +11,33 @@ import {
   FiRefreshCw,
   FiSave,
   FiPlay,
-  FiEye,
-  FiPlus,
-  FiMinus
+  FiEye
 } from 'react-icons/fi';
 import { patientAPI, sessionAPI, sceneAPI } from '../services/api';
 import ScenePreview from '../components/ScenePreview';
 import toast from 'react-hot-toast';
+
+const TEMPLATE_TO_ENVIRONMENT = {
+  'living-room': 'indoor-room',
+  'road-with-skyscrappers': 'city-street',
+  rooftop: 'rooftop',
+  'cliff-edge': 'cliff-edge',
+  cave: 'cave',
+  elevator: 'elevator',
+  airplane: 'airplane',
+  airport: 'airport'
+};
+
+const ENVIRONMENT_TO_TEMPLATE = {
+  'indoor-room': 'living-room',
+  'city-street': 'road-with-skyscrappers',
+  rooftop: 'rooftop',
+  'cliff-edge': 'cliff-edge',
+  cave: 'cave',
+  elevator: 'elevator',
+  airplane: 'airplane',
+  airport: 'airport'
+};
 
 const SceneBuilder = () => {
   const navigate = useNavigate();
@@ -26,40 +46,46 @@ const SceneBuilder = () => {
   const sessionId = searchParams.get('session');
 
   const [patients, setPatients] = useState([]);
+  const [sceneTemplates, setSceneTemplates] = useState([]);
   const [selectedPatient, setSelectedPatient] = useState(patientId || '');
   const [sessionConfig, setSessionConfig] = useState({
-    phobia: 'arachnophobia',
+    phobia: '',
     intensity: 5,
+    sceneTemplate: 'living-room',
     environment: 'indoor-room',
-    objectCounts: { triggers: 3, ambient: 5 },
-    customInstructions: ''
+    sceneDescription: ''
   });
   const [sceneJSON, setSceneJSON] = useState(null);
   const [previewURL, setPreviewURL] = useState(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSendingToUnity, setIsSendingToUnity] = useState(false);
 
-  // Load patients
+  // Load patients and templates
   useEffect(() => {
-    const loadPatients = async () => {
+    const loadInitialData = async () => {
       try {
-        const response = await patientAPI.getAll();
-        setPatients(response.data || []);
+        const [patientsResponse, templatesResponse] = await Promise.all([
+          patientAPI.getAll(),
+          sceneAPI.getTemplates()
+        ]);
+        setPatients(patientsResponse.data || []);
+        setSceneTemplates(templatesResponse.data || []);
         
         // Auto-select patient if provided
         if (patientId) {
           setSelectedPatient(patientId);
-          const patient = response.data?.find(p => p._id === patientId);
+          const patient = patientsResponse.data?.find(p => p._id === patientId);
           if (patient?.phobia) {
             setSessionConfig(prev => ({ ...prev, phobia: patient.phobia }));
           }
         }
       } catch (error) {
-        console.error('Error loading patients:', error);
+        console.error('Error loading setup data:', error);
       }
     };
 
-    loadPatients();
+    loadInitialData();
   }, [patientId]);
 
   // Load existing session if editing
@@ -73,7 +99,9 @@ const SceneBuilder = () => {
           setSessionConfig({
             phobia: session.phobia,
             intensity: session.intensity,
-            environment: session.environment
+            sceneTemplate: session.sceneTemplate || ENVIRONMENT_TO_TEMPLATE[session.environment] || 'living-room',
+            environment: session.environment,
+            sceneDescription: session.sceneDescription || ''
           });
           setSceneJSON(session.sceneJSON);
           setPreviewURL(session.previewURL);
@@ -97,9 +125,9 @@ const SceneBuilder = () => {
       const response = await sceneAPI.generate({
         phobia: sessionConfig.phobia,
         intensity: sessionConfig.intensity,
+        sceneTemplate: sessionConfig.sceneTemplate,
         environment: sessionConfig.environment,
-        objectCounts: sessionConfig.objectCounts,
-        customInstructions: sessionConfig.customInstructions
+        sceneDescription: sessionConfig.sceneDescription
       });
       
       setSceneJSON(response.data.sceneJSON);
@@ -159,16 +187,33 @@ const SceneBuilder = () => {
     setSessionConfig(prev => ({ ...prev, [field]: value }));
   };
 
-  // Handle object count changes
-  const handleObjectCountChange = (field, delta) => {
-    setSessionConfig(prev => ({
-      ...prev,
-      objectCounts: {
-        ...prev.objectCounts,
-        [field]: Math.max(0, Math.min(20, prev.objectCounts[field] + delta))
+  // Send existing scene JSON directly to Unity
+  const handleSendToUnity = async () => {
+    if (!sceneJSON) {
+      toast.error('Generate a scene first');
+      return;
+    }
+
+    try {
+      setIsSendingToUnity(true);
+      const payload = sessionId
+        ? { sessionId }
+        : { sceneJSON };
+
+      const response = await sceneAPI.build(payload);
+      if (response?.data?.previewURL) {
+        setPreviewURL(response.data.previewURL);
       }
-    }));
+      toast.success('Scene sent to Unity');
+    } catch (error) {
+      console.error('Error sending scene to Unity:', error);
+      toast.error(error?.response?.data?.message || 'Failed to send scene to Unity');
+    } finally {
+      setIsSendingToUnity(false);
+    }
   };
+
+  const selectedPatientData = patients.find(patient => patient._id === selectedPatient);
 
   return (
     <div className="space-y-6">
@@ -229,48 +274,46 @@ const SceneBuilder = () => {
             </select>
           </div>
 
+          {selectedPatientData && (
+            <div className="card bg-primary-50 border border-primary-100">
+              <p className="text-sm text-primary-700">
+                <span className="font-semibold">Registered phobia:</span> {selectedPatientData.phobia}
+              </p>
+              <p className="text-xs text-primary-600 mt-1">
+                Phobia is preset from patient registration and cannot be changed here.
+              </p>
+            </div>
+          )}
+
           {/* Session Configuration */}
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
               Session Configuration
             </h2>
             
-            {/* Phobia Selection */}
+            {/* Scene Template Selection */}
             <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Phobia Type</label>
-              <select
-                value={sessionConfig.phobia}
-                onChange={(e) => handleConfigChange('phobia', e.target.value)}
-                className="form-select"
-              >
-                <option value="arachnophobia">Arachnophobia (Spiders)</option>
-                <option value="acrophobia">Acrophobia (Heights)</option>
-                <option value="claustrophobia">Claustrophobia (Confined Spaces)</option>
-                <option value="social-anxiety">Social Anxiety</option>
-                <option value="glossophobia">Glossophobia (Public Speaking)</option>
-                <option value="aviophobia">Aviophobia (Flying)</option>
-                <option value="cynophobia">Cynophobia (Dogs)</option>
-                <option value="ophidiophobia">Ophidiophobia (Snakes)</option>
-              </select>
-            </div>
-
-            {/* Environment Selection */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Environment</label>
-              <select
-                value={sessionConfig.environment}
-                onChange={(e) => handleConfigChange('environment', e.target.value)}
-                className="form-select"
-              >
-                <option value="indoor-room">Indoor Room</option>
-                <option value="outdoor-park">Outdoor Park</option>
-                <option value="office">Office</option>
-                <option value="elevator">Elevator</option>
-                <option value="rooftop">Rooftop</option>
-                <option value="bridge">Bridge</option>
-                <option value="forest">Forest</option>
-                <option value="presentation-room">Presentation Room</option>
-              </select>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Scene Template</label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {sceneTemplates.map((template) => (
+                  <button
+                    key={template.id}
+                    type="button"
+                    onClick={() => {
+                      handleConfigChange('sceneTemplate', template.id);
+                      handleConfigChange('environment', TEMPLATE_TO_ENVIRONMENT[template.id] || template.environment);
+                    }}
+                    className={`p-3 rounded-lg border-2 text-left transition-all ${
+                      sessionConfig.sceneTemplate === template.id
+                        ? 'border-primary-500 bg-primary-50'
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <p className="font-medium text-sm text-gray-900">{template.name}</p>
+                    <p className="text-xs text-gray-500 mt-1">{template.description}</p>
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Intensity Slider */}
@@ -299,64 +342,17 @@ const SceneBuilder = () => {
               </div>
             </div>
 
-            {/* Object Counts */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Scene Objects</label>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 mb-2">Trigger Objects</p>
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => handleObjectCountChange('triggers', -1)}
-                      className="p-1 bg-white rounded border hover:bg-gray-100"
-                    >
-                      <FiMinus className="w-4 h-4" />
-                    </button>
-                    <span className="text-xl font-semibold">{sessionConfig.objectCounts.triggers}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleObjectCountChange('triggers', 1)}
-                      className="p-1 bg-white rounded border hover:bg-gray-100"
-                    >
-                      <FiPlus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-600 mb-2">Ambient Objects</p>
-                  <div className="flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={() => handleObjectCountChange('ambient', -1)}
-                      className="p-1 bg-white rounded border hover:bg-gray-100"
-                    >
-                      <FiMinus className="w-4 h-4" />
-                    </button>
-                    <span className="text-xl font-semibold">{sessionConfig.objectCounts.ambient}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleObjectCountChange('ambient', 1)}
-                      className="p-1 bg-white rounded border hover:bg-gray-100"
-                    >
-                      <FiPlus className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Custom Instructions */}
+            {/* Scene Description */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Custom Scene Instructions</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Scene Description</label>
               <textarea
-                value={sessionConfig.customInstructions}
-                onChange={(e) => handleConfigChange('customInstructions', e.target.value)}
-                placeholder="Add specific instructions for the AI scene generator...&#10;&#10;Examples:&#10;• Place spiders near the window&#10;• Add calming background music&#10;• Include an exit door that's always visible&#10;• Make the lighting dim but not scary"
+                value={sessionConfig.sceneDescription}
+                onChange={(e) => handleConfigChange('sceneDescription', e.target.value)}
+                placeholder="Describe the scene in detail for this patient and session intensity...&#10;&#10;Examples:&#10;• Start near the entrance with clear exits visible&#10;• Keep initial trigger distance moderate, then gradually reduce&#10;• Maintain calm ambient sounds and neutral lighting"
                 className="form-textarea w-full h-32 text-sm"
               />
               <p className="text-xs text-gray-500 mt-1">
-                These instructions will guide the AI when generating your scene.
+                This description guides AI scene generation while keeping the selected template.
               </p>
             </div>
           </div>
@@ -393,7 +389,9 @@ const SceneBuilder = () => {
               <ScenePreview 
                 previewURL={previewURL}
                 sceneJSON={sceneJSON}
+                isLoading={isSendingToUnity}
                 onEdit={() => {}}
+                onSendToUnity={handleSendToUnity}
               />
             ) : (
               <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center">

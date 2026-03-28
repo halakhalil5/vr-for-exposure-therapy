@@ -14,11 +14,113 @@ const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
 const axios = require("axios");
 
+const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
+
+const SCENE_TEMPLATES = [
+  {
+    id: 'living-room',
+    name: 'Living Room',
+    environment: 'indoor-room',
+    description: 'Comfortable indoor home setting'
+  },
+  {
+    id: 'road-with-skyscrappers',
+    name: 'Road with Skyscrappers',
+    environment: 'city-street',
+    description: 'Urban road surrounded by tall skyscrapers'
+  },
+  {
+    id: 'rooftop',
+    name: 'Rooftop',
+    environment: 'rooftop',
+    description: 'Open rooftop at significant height'
+  },
+  {
+    id: 'cliff-edge',
+    name: 'Cliff edge',
+    environment: 'cliff-edge',
+    description: 'Natural cliff edge with steep drop'
+  },
+  {
+    id: 'cave',
+    name: 'Cave',
+    environment: 'cave',
+    description: 'Enclosed cave pathway with rocky surroundings'
+  },
+  {
+    id: 'elevator',
+    name: 'Elevator',
+    environment: 'elevator',
+    description: 'Confined elevator cabin'
+  },
+  {
+    id: 'airplane',
+    name: 'Airplane',
+    environment: 'airplane',
+    description: 'Commercial airplane cabin'
+  },
+  {
+    id: 'airport',
+    name: 'Airport',
+    environment: 'airport',
+    description: 'Airport terminal and boarding context'
+  }
+];
+
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'previews');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
+
+const buildFallbackSceneJSON = ({
+  environment,
+  intensity,
+  sceneDescription,
+  objectCounts,
+  customInstructions
+}) => {
+  const triggerCount = Math.max(1, Math.min(10, objectCounts?.triggers || Math.ceil(Number(intensity) / 2)));
+  const ambientCount = Math.max(0, Math.min(20, objectCounts?.ambient || 5));
+
+  const objects = [];
+  for (let i = 0; i < ambientCount; i += 1) {
+    objects.push({
+      id: `ambient_${i + 1}`,
+      type: 'ambient',
+      position: [i % 5, 0, Math.floor(i / 5) + 2],
+      scale: 1
+    });
+  }
+
+  const triggers = [];
+  for (let i = 0; i < triggerCount; i += 1) {
+    triggers.push({
+      id: `trigger_${i + 1}`,
+      type: 'trigger',
+      position: [i % 4, 0, 1 + Math.floor(i / 4)],
+      scale: 1
+    });
+  }
+
+  return {
+    environment: {
+      type: environment,
+      size: 'medium',
+      ambiance: Number(intensity) > 6 ? 'challenging' : 'neutral',
+      description: sceneDescription || ''
+    },
+    lighting: {
+      brightness: Number(intensity) > 6 ? 0.8 : 0.65,
+      color: '#ffffff'
+    },
+    metadata: {
+      generator: 'fallback',
+      customInstructions: customInstructions || ''
+    },
+    objects: [...objects, ...triggers]
+  };
+};
 
 /**
  * Generate VR scene using LLM
@@ -32,28 +134,39 @@ const generateScene = asyncHandler(async (req, res) => {
     sessionId,
     phobia,
     intensity,
+    sceneTemplate,
     environment,
     objectCounts,
+    sceneDescription,
     customInstructions
   } = req.body;
 
+  const selectedTemplate = SCENE_TEMPLATES.find((template) => template.id === sceneTemplate);
+  const resolvedEnvironment = selectedTemplate?.environment || environment;
+
   // Validate required fields
-  if (!phobia || !intensity || !environment) {
-    throw new ApiError('Phobia, intensity, and environment are required', 400);
+  if (!phobia || !intensity || !resolvedEnvironment) {
+    throw new ApiError('Phobia, intensity, and scene template/environment are required', 400);
   }
 
   console.log('🎨 Generating scene with LLM...');
   console.log('   Phobia:', phobia);
   console.log('   Intensity:', intensity);
-  console.log('   Environment:', environment);
+  console.log('   Template:', sceneTemplate || 'n/a');
+  console.log('   Environment:', resolvedEnvironment);
 
   try {
-    // Generate scene using LLM service
-    const prompt = `Generate a VR exposure therapy scene as JSON only. No explanation.
+    let sceneJSON;
+
+    if (ENABLE_LLM) {
+      // Generate scene using LLM service
+      const prompt = `Generate a VR exposure therapy scene as JSON only. No explanation.
 
 Phobia: ${phobia}
-Environment: ${environment}
+Template: ${selectedTemplate?.name || 'Custom'}
+Environment: ${resolvedEnvironment}
 Intensity: ${intensity}/10
+${sceneDescription ? `Therapist scene description: ${sceneDescription}` : ''}
 ${objectCounts ? `Objects: ${objectCounts.triggers || 3} triggers, ${objectCounts.ambient || 5} ambient` : ''}
 ${customInstructions ? `Instructions: ${customInstructions}` : ''}
 
@@ -66,23 +179,33 @@ JSON format:
 
 Return ONLY the JSON, no other text.`;
 
-console.log('📤 Sending prompt to Ollama...');
-const ollamaResponse = await axios.post("http://localhost:11434/api/generate", {
-  model: "llama3",
-  prompt: prompt,
-  stream: false
-}, {
-  timeout: 90000 // 90 seconds timeout for LLM
-});
-console.log('✅ Ollama response received');
+      console.log('📤 Sending prompt to Ollama...');
+      const ollamaResponse = await axios.post("http://localhost:11434/api/generate", {
+        model: "llama3",
+        prompt: prompt,
+        stream: false
+      }, {
+        timeout: 90000 // 90 seconds timeout for LLM
+      });
+      console.log('✅ Ollama response received');
 
-const rawOutput = ollamaResponse.data.response;
+      const rawOutput = ollamaResponse.data.response;
 
-// Extract JSON safely
-const jsonStart = rawOutput.indexOf("{");
-const jsonEnd = rawOutput.lastIndexOf("}") + 1;
+      // Extract JSON safely
+      const jsonStart = rawOutput.indexOf("{");
+      const jsonEnd = rawOutput.lastIndexOf("}") + 1;
 
-const sceneJSON = JSON.parse(rawOutput.substring(jsonStart, jsonEnd));
+      sceneJSON = JSON.parse(rawOutput.substring(jsonStart, jsonEnd));
+    } else {
+      console.log('🛠️ LLM disabled. Using fallback scene generator.');
+      sceneJSON = buildFallbackSceneJSON({
+        environment: resolvedEnvironment,
+        intensity,
+        sceneDescription,
+        objectCounts,
+        customInstructions
+      });
+    }
 
     // If sessionId provided, update the session
     let session = null;
@@ -230,6 +353,7 @@ const buildScene = asyncHandler(async (req, res) => {
       message: 'Scene sent to Unity successfully',
       data: result
     });
+    console.log(result);
 
   } catch (error) {
     console.error('Unity build error:', error);
@@ -242,74 +366,7 @@ const buildScene = asyncHandler(async (req, res) => {
  * GET /api/scene-templates
  */
 const getSceneTemplates = asyncHandler(async (req, res) => {
-  const { phobia } = req.query;
-
-  // Predefined scene templates for common phobias
-  const templates = {
-    arachnophobia: [
-      {
-        name: 'Basement Encounter',
-        description: 'Dark basement with spider webs and spiders',
-        intensity: 5,
-        environment: 'indoor-room',
-        preview: '/templates/arachnophobia_basement.jpg'
-      },
-      {
-        name: 'Garden Path',
-        description: 'Outdoor path with spiders in vegetation',
-        intensity: 3,
-        environment: 'outdoor-park',
-        preview: '/templates/arachnophobia_garden.jpg'
-      }
-    ],
-    acrophobia: [
-      {
-        name: 'Office Window',
-        description: 'High-rise office with floor-to-ceiling windows',
-        intensity: 4,
-        environment: 'office',
-        preview: '/templates/acrophobia_office.jpg'
-      },
-      {
-        name: 'Glass Bridge',
-        description: 'Glass-bottom bridge over canyon',
-        intensity: 8,
-        environment: 'bridge',
-        preview: '/templates/acrophobia_bridge.jpg'
-      }
-    ],
-    claustrophobia: [
-      {
-        name: 'Elevator Ride',
-        description: 'Small elevator ascending slowly',
-        intensity: 5,
-        environment: 'elevator',
-        preview: '/templates/claustrophobia_elevator.jpg'
-      }
-    ],
-    'social-anxiety': [
-      {
-        name: 'Small Meeting',
-        description: 'Conference room with few attendees',
-        intensity: 3,
-        environment: 'presentation-room',
-        preview: '/templates/social_meeting.jpg'
-      },
-      {
-        name: 'Large Presentation',
-        description: 'Auditorium with large audience',
-        intensity: 8,
-        environment: 'presentation-room',
-        preview: '/templates/social_presentation.jpg'
-      }
-    ]
-  };
-
-  if (phobia && templates[phobia]) {
-    res.json({ data: templates[phobia] });
-  } else {
-    res.json({ data: templates });
-  }
+  res.json({ data: SCENE_TEMPLATES });
 });
 
 /**

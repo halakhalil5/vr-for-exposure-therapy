@@ -12,7 +12,6 @@ const unityService = require('../services/unityService');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
-const axios = require("axios");
 
 const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
 
@@ -104,8 +103,8 @@ const buildFallbackSceneJSON = ({
   }
 
   return {
-    environment: {
-      type: environment,
+    environment,
+    environmentSettings: {
       size: 'medium',
       ambiance: Number(intensity) > 6 ? 'challenging' : 'neutral',
       description: sceneDescription || ''
@@ -159,43 +158,20 @@ const generateScene = asyncHandler(async (req, res) => {
     let sceneJSON;
 
     if (ENABLE_LLM) {
-      // Generate scene using LLM service
-      const prompt = `Generate a VR exposure therapy scene as JSON only. No explanation.
+      const therapistInstructions = [sceneDescription, customInstructions]
+        .filter(Boolean)
+        .join('\n\n');
 
-Phobia: ${phobia}
-Template: ${selectedTemplate?.name || 'Custom'}
-Environment: ${resolvedEnvironment}
-Intensity: ${intensity}/10
-${sceneDescription ? `Therapist scene description: ${sceneDescription}` : ''}
-${objectCounts ? `Objects: ${objectCounts.triggers || 3} triggers, ${objectCounts.ambient || 5} ambient` : ''}
-${customInstructions ? `Instructions: ${customInstructions}` : ''}
-
-JSON format:
-{
-  "environment": {"type": "string", "size": "medium", "ambiance": "neutral"},
-  "lighting": {"brightness": 0.7, "color": "#ffffff"},
-  "objects": [{"id": "obj1", "type": "string", "position": [0,0,5], "scale": 1.0}]
-}
-
-Return ONLY the JSON, no other text.`;
-
-      console.log('📤 Sending prompt to Ollama...');
-      const ollamaResponse = await axios.post("http://localhost:11434/api/generate", {
-        model: "llama3",
-        prompt: prompt,
-        stream: false
-      }, {
-        timeout: 90000 // 90 seconds timeout for LLM
+      console.log('📤 Sending scene generation request to OpenAI...');
+      sceneJSON = await llmService.generateSceneConfiguration({
+        phobia,
+        intensity: Number(intensity),
+        environment: resolvedEnvironment,
+        objectCounts,
+        customInstructions: therapistInstructions,
+        sceneTemplate: selectedTemplate?.name || 'Custom'
       });
-      console.log('✅ Ollama response received');
-
-      const rawOutput = ollamaResponse.data.response;
-
-      // Extract JSON safely
-      const jsonStart = rawOutput.indexOf("{");
-      const jsonEnd = rawOutput.lastIndexOf("}") + 1;
-
-      sceneJSON = JSON.parse(rawOutput.substring(jsonStart, jsonEnd));
+      console.log('✅ OpenAI response received');
     } else {
       console.log('🛠️ LLM disabled. Using fallback scene generator.');
       sceneJSON = buildFallbackSceneJSON({

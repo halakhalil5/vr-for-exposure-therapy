@@ -7,6 +7,8 @@
 
 const OpenAI = require('openai');
 
+const DISALLOWED_OBJECT_TERMS = ['floor', 'room', 'wall', 'walls', 'camera', 'furniture'];
+
 // Initialize OpenAI client (will use OPENAI_API_KEY from env)
 let openai = null;
 
@@ -20,6 +22,39 @@ const initializeClient = () => {
     });
   }
   return openai;
+};
+
+const normalizeSceneShape = (scene = {}, selectedEnvironment) => {
+  const rawEnvironment = scene.environment;
+  let normalizedEnvironment = selectedEnvironment;
+
+  if (typeof rawEnvironment === 'string' && rawEnvironment.trim()) {
+    normalizedEnvironment = rawEnvironment.trim();
+  } else if (rawEnvironment && typeof rawEnvironment === 'object') {
+    normalizedEnvironment = rawEnvironment.type || rawEnvironment.id || rawEnvironment.name || selectedEnvironment;
+  }
+
+  const normalizedObjects = Array.isArray(scene.objects)
+    ? scene.objects
+        .map((obj) => {
+          const { environment, ...rest } = obj || {};
+          return rest;
+        })
+        .filter((obj) => {
+          const typeText = String(obj?.type || '').toLowerCase();
+          const nameText = String(obj?.name || '').toLowerCase();
+          return !DISALLOWED_OBJECT_TERMS.some(
+            (term) => typeText.includes(term) || nameText.includes(term)
+          );
+        })
+    : [];
+
+  return {
+    ...scene,
+    environment: normalizedEnvironment,
+    objects: normalizedObjects,
+    camera: undefined
+  };
 };
 
 /**
@@ -38,57 +73,50 @@ const generateSceneConfiguration = async ({
   intensity,
   environment,
   objectCounts = {},
-  customInstructions = ''
+  customInstructions = '',
+  sceneTemplate = 'Custom'
 }) => {
   // Try to use OpenAI if available
   const client = initializeClient();
   
   if (client) {
     try {
-      return await generateWithOpenAI(phobia, intensity, environment, objectCounts, customInstructions);
+      const generated = await generateWithOpenAI(phobia, intensity, environment, objectCounts, customInstructions, sceneTemplate);
+      return normalizeSceneShape(generated, environment);
     } catch (error) {
       console.warn('OpenAI generation failed, using fallback:', error.message);
     }
   }
 
   // Fallback to rule-based generation
-  return generateFallbackScene(phobia, intensity, environment, objectCounts);
+  return normalizeSceneShape(
+    generateFallbackScene(phobia, intensity, environment, objectCounts),
+    environment
+  );
 };
 
 /**
  * Generate scene using OpenAI API
  */
-const generateWithOpenAI = async (phobia, intensity, environment, objectCounts, customInstructions) => {
+const generateWithOpenAI = async (phobia, intensity, environment, objectCounts, customInstructions, sceneTemplate) => {
   const systemPrompt = `You are a VR scene designer specializing in exposure therapy environments. 
 Generate detailed JSON scene configurations for therapeutic VR experiences.
 Your scenes should be clinically appropriate, gradually exposing patients to their fears.
-Always respond with valid JSON only, no additional text.`;
+Always respond with valid JSON only, no additional text.
+The selected environment type is mandatory and must be used exactly as provided.`;
 
   const userPrompt = `Create a VR scene configuration for exposure therapy with these parameters:
 
 Phobia: ${phobia}
 Intensity Level: ${intensity}/10 (1=minimal exposure, 10=maximum exposure)
 Environment: ${environment}
+Selected Template: ${sceneTemplate}
 ${objectCounts ? `Object counts: ${JSON.stringify(objectCounts)}` : ''}
-${customInstructions ? `Additional instructions: ${customInstructions}` : ''}
+${customInstructions ? `Therapist instructions for room and objects: ${customInstructions}` : ''}
 
 Generate a JSON scene configuration with this structure:
 {
-  "environment": {
-    "type": "environment type",
-    "skybox": "skybox name",
-    "lighting": {
-      "type": "natural/artificial",
-      "intensity": 0.0-2.0,
-      "color": "#RRGGBB",
-      "timeOfDay": "dawn/day/dusk/night"
-    },
-    "weather": {
-      "type": "clear/cloudy/rain/fog",
-      "intensity": 0.0-1.0
-    },
-    "ambientSounds": ["sound1", "sound2"]
-  },
+  "environment": "environment type id",
   "objects": [
     {
       "type": "object_type",
@@ -106,13 +134,17 @@ Generate a JSON scene configuration with this structure:
       "behavior": "static/moving/interactive",
       "spawnArea": {"minX": 0, "maxX": 0, "minZ": 0, "maxZ": 0}
     }
-  ],
-  "camera": {
-    "startPosition": {"x": 0, "y": 1.6, "z": 0},
-    "allowMovement": true,
-    "movementBounds": {"minX": -10, "maxX": 10, "minZ": -10, "maxZ": 10}
-  }
+  ]
 }
+
+Requirements:
+- Set environment exactly to "${environment}" as a string (not an object).
+- Include objects that match the therapist instructions.
+- Do not include an environment field inside individual objects.
+- Do not include objects whose type or name represents floor, room, walls, camera, or furniture.
+- Do not include a top-level camera field in the scene JSON.
+- Keep object positions physically plausible inside the selected environment.
+- Return only valid JSON matching the schema above.
 
 Create an appropriate scene based on the intensity level. Lower intensity means fewer triggers, 
 greater distance from triggers, and calmer environment. Higher intensity means more triggers, 
@@ -146,12 +178,12 @@ closer proximity, and potentially more dynamic/threatening scenarios.`;
 const generateFallbackScene = (phobia, intensity, environment, objectCounts) => {
   // Base scene configuration
   const scene = {
-    environment: {
-      type: environment,
+    environment,
+    environmentSettings: {
       skybox: getDefaultSkybox(environment),
       lighting: {
         type: 'natural',
-        intensity: intensity <= 5 ? 1.2 : 0.8, // Brighter for low intensity
+        intensity: intensity <= 5 ? 1.2 : 0.8,
         color: '#FFFFFF',
         timeOfDay: intensity <= 3 ? 'day' : intensity <= 7 ? 'dusk' : 'night'
       },
@@ -162,12 +194,7 @@ const generateFallbackScene = (phobia, intensity, environment, objectCounts) => 
       ambientSounds: getAmbientSounds(environment, intensity)
     },
     objects: generateEnvironmentObjects(environment),
-    triggers: generateTriggers(phobia, intensity, objectCounts),
-    camera: {
-      startPosition: { x: 0, y: 1.6, z: 0 },
-      allowMovement: true,
-      movementBounds: { minX: -10, maxX: 10, minZ: -10, maxZ: 10 }
-    }
+    triggers: generateTriggers(phobia, intensity, objectCounts)
   };
 
   return scene;

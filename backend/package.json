@@ -5,9 +5,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "concurrently --kill-others-on-fail \"ollama serve\" \"nodemon server.js\"",
+    "dev": "nodemon server.js",
     "dev:server": "nodemon server.js",
-    "ollama": "ollama serve",
     "test": "jest"
   },
   "keywords": [
@@ -29,7 +28,6 @@
     "uuid": "^9.0.1"
   },
   "devDependencies": {
-    "concurrently": "^8.2.2",
     "nodemon": "^3.0.1"
   }
 }

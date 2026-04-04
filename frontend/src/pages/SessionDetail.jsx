@@ -279,17 +279,6 @@ const SessionDetail = () => {
         </div>
       )}
 
-      {/* Scene JSON */}
-      {session.sceneJSON && (
-        <div className="card">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">
-            Scene Configuration
-          </h2>
-          <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm max-h-64">
-            {JSON.stringify(session.sceneJSON, null, 2)}
-          </pre>
-        </div>
-      )}
     </div>
   );
 };

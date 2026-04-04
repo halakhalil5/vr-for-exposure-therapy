@@ -27,7 +27,6 @@ const ScenePreview = ({
   onSendToUnity
 }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [showJSON, setShowJSON] = useState(false);
 
   // Render loading state
   if (isLoading) {
@@ -125,26 +124,6 @@ const ScenePreview = ({
           </div>
         )}
       </div>
-
-      {/* Scene Configuration Toggle */}
-      {sceneJSON && (
-        <div>
-          <button
-            onClick={() => setShowJSON(!showJSON)}
-            className="text-sm text-primary-600 hover:text-primary-700 font-medium"
-          >
-            {showJSON ? 'Hide' : 'View'} Scene Configuration
-          </button>
-          
-          {showJSON && (
-            <div className="mt-3 bg-gray-900 rounded-lg p-4 overflow-auto max-h-60">
-              <pre className="text-xs text-gray-300 font-mono">
-                {JSON.stringify(sceneJSON, null, 2)}
-              </pre>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Action Buttons */}
       <div className="flex flex-wrap gap-2 pt-2">

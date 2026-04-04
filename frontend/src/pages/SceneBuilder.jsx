@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
   FiSend, 
   FiRefreshCw,
@@ -13,6 +13,7 @@ import {
   FiPlay,
   FiEye
 } from 'react-icons/fi';
+import { format } from 'date-fns';
 import { patientAPI, sessionAPI, sceneAPI } from '../services/api';
 import ScenePreview from '../components/ScenePreview';
 import toast from 'react-hot-toast';
@@ -44,13 +45,16 @@ const ENVIRONMENT_TO_TEMPLATE = {
 
 const SceneBuilder = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const patientId = searchParams.get('patient');
   const sessionId = searchParams.get('session');
+  const initialPatientId = location.state?.patient?._id || patientId || '';
 
   const [patients, setPatients] = useState([]);
   const [sceneTemplates, setSceneTemplates] = useState([]);
-  const [selectedPatient, setSelectedPatient] = useState(patientId || '');
+  const [selectedPatient, setSelectedPatient] = useState(initialPatientId);
+  const [patientSessionHistory, setPatientSessionHistory] = useState([]);
   const [sessionConfig, setSessionConfig] = useState({
     phobia: '',
     intensity: 5,
@@ -76,9 +80,9 @@ const SceneBuilder = () => {
         setSceneTemplates(templatesResponse.data || []);
         
         // Auto-select patient if provided
-        if (patientId) {
-          setSelectedPatient(patientId);
-          const patient = patientsResponse.data?.find(p => p._id === patientId);
+        if (initialPatientId) {
+          setSelectedPatient(initialPatientId);
+          const patient = patientsResponse.data?.find(p => p._id === initialPatientId);
           if (patient?.phobia) {
             setSessionConfig(prev => ({ ...prev, phobia: patient.phobia }));
           }
@@ -89,7 +93,7 @@ const SceneBuilder = () => {
     };
 
     loadInitialData();
-  }, [patientId]);
+  }, [initialPatientId]);
 
   // Load existing session if editing
   useEffect(() => {
@@ -115,6 +119,35 @@ const SceneBuilder = () => {
       loadSession();
     }
   }, [sessionId]);
+
+  // Load patient session history so the latest intensity can be reused.
+  useEffect(() => {
+    if (!selectedPatient) {
+      setPatientSessionHistory([]);
+      return;
+    }
+
+    const loadPatientHistory = async () => {
+      try {
+        const response = await patientAPI.getSessions(selectedPatient, { limit: 10 });
+        const history = (response.data || []).filter((item) => item._id !== sessionId);
+        setPatientSessionHistory(history);
+
+        if (!sessionId) {
+          const previousIntensity = history[0]?.intensity;
+          setSessionConfig(prev => ({
+            ...prev,
+            intensity: previousIntensity ?? 5
+          }));
+        }
+      } catch (error) {
+        console.error('Error loading patient session history:', error);
+        setPatientSessionHistory([]);
+      }
+    };
+
+    loadPatientHistory();
+  }, [selectedPatient, sessionId]);
 
   // Generate scene using LLM
   const handleGenerateScene = async () => {
@@ -288,6 +321,36 @@ const SceneBuilder = () => {
             </div>
           )}
 
+          {patientSessionHistory.length > 0 && (
+            <div className="card border border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">Previous session intensity log</h2>
+                  <p className="text-sm text-gray-500">
+                    Latest session used {patientSessionHistory[0].intensity}/10
+                  </p>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {format(new Date(patientSessionHistory[0].date), 'MMM d, yyyy')}
+                </span>
+              </div>
+
+              <div className="space-y-2">
+                {patientSessionHistory.slice(0, 3).map((session) => (
+                  <div key={session._id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-gray-100">
+                    <div>
+                      <p className="font-medium text-gray-900">Intensity {session.intensity}/10</p>
+                      <p className="text-xs text-gray-500 capitalize">
+                        {session.environment} • {format(new Date(session.date), 'MMM d, yyyy')}
+                      </p>
+                    </div>
+                    <span className="text-xs text-gray-400 capitalize">{session.status}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Session Configuration */}
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -320,25 +383,32 @@ const SceneBuilder = () => {
             </div>
 
             {/* Intensity Slider */}
-            <div className="mb-4">
-              <div className="flex justify-between items-center mb-1">
-                <label className="block text-sm font-medium text-gray-700">Intensity Level</label>
-                <span className={`text-sm font-semibold ${
-                  sessionConfig.intensity <= 3 ? 'text-green-600' :
-                  sessionConfig.intensity <= 6 ? 'text-yellow-600' : 'text-red-600'
+            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+              <div className="flex items-start justify-between gap-4 mb-2">
+                <div>
+                  <p className="text-sm font-semibold text-gray-900">Intensity Level</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Start from the last recorded setting and adjust if needed.
+                  </p>
+                </div>
+                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
+                  sessionConfig.intensity <= 3 ? 'bg-green-100 text-green-700' :
+                  sessionConfig.intensity <= 6 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
                 }`}>
                   {sessionConfig.intensity}/10 ({sessionConfig.intensity <= 3 ? 'Low' : sessionConfig.intensity <= 6 ? 'Medium' : 'High'})
                 </span>
               </div>
+
               <input
                 type="range"
                 min="1"
                 max="10"
                 value={sessionConfig.intensity}
                 onChange={(e) => handleConfigChange('intensity', parseInt(e.target.value))}
-                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gray-200"
               />
-              <div className="flex justify-between text-xs text-gray-400 mt-1">
+
+              <div className="mt-2 flex justify-between text-xs font-medium text-gray-400">
                 <span>Minimal</span>
                 <span>Moderate</span>
                 <span>Maximum</span>
@@ -346,15 +416,15 @@ const SceneBuilder = () => {
             </div>
 
             {/* Scene Description */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Scene Description</label>
+            <div className="rounded-xl border border-gray-200 bg-white p-4">
+              <label className="block text-sm font-medium text-gray-700 mb-2">Scene Description</label>
               <textarea
                 value={sessionConfig.sceneDescription}
                 onChange={(e) => handleConfigChange('sceneDescription', e.target.value)}
                 placeholder="Describe the scene in detail for this patient and session intensity...&#10;&#10;Examples:&#10;• Start near the entrance with clear exits visible&#10;• Keep initial trigger distance moderate, then gradually reduce&#10;• Maintain calm ambient sounds and neutral lighting"
                 className="form-textarea w-full h-32 text-sm"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 mt-2">
                 This description guides AI scene generation while keeping the selected template.
               </p>
             </div>
@@ -404,20 +474,6 @@ const SceneBuilder = () => {
               </div>
             )}
           </div>
-
-
-{/* remove after testong */}
-          {/* Scene JSON */}
-          {sceneJSON && (
-            <div className="card">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">
-                Scene Configuration (JSON)
-              </h2>
-              <pre className="bg-gray-50 p-4 rounded-lg overflow-auto text-sm max-h-64">
-                {JSON.stringify(sceneJSON, null, 2)}
-              </pre>
-            </div>
-          )}
         </div>
       </div>
     </div>

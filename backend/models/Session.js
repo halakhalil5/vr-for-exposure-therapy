@@ -95,9 +95,11 @@ const sessionSchema = new mongoose.Schema({
     required: [true, 'Environment is required'],
     enum: {
       values: [
+        'living-room',      // Living room environment
         'indoor-room',       // Simple room
         'outdoor-park',      // Park or garden
         'office',            // Office building
+        'building',          // Generic building interior
         'elevator',          // Elevator/small space
         'rooftop',           // High building rooftop
         'bridge',            // Bridge or overpass
@@ -123,6 +125,7 @@ const sessionSchema = new mongoose.Schema({
       'road-with-skyscrappers',
       'rooftop',
       'cliff-edge',
+      'building',
       'cave',
       'elevator',
       'airplane',

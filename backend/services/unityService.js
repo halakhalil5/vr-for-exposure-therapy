@@ -3,6 +3,9 @@
  * 
  * Handles communication with the Unity scene builder application.
  * Sends scene configurations and receives preview images.
+ * 
+ * Specification: Always check /status before /build-scene
+ * Ensures Unity is ready and responding before attempting scene builds.
  */
 
 const axios = require('axios');
@@ -10,38 +13,31 @@ const axios = require('axios');
 // Unity HTTP listener configuration
 const UNITY_SERVER_URL = process.env.UNITY_SERVER_URL || 'http://localhost:8080';
 const UNITY_TIMEOUT = 60000; // 60 seconds for scene building
+const HEALTH_CHECK_TIMEOUT = 5000; // 5 seconds for health check
 
-// Map API environment IDs to Unity environment IDs.
-const UNITY_ENVIRONMENT_MAP = {
-  'indoor-room': 'living_room',
-  'outdoor-park': 'outdoor_park',
-  office: 'office_space',
-  elevator: 'elevator',
-  rooftop: 'rooftop',
-  bridge: 'bridge',
-  'cliff-edge': 'cliff_edge',
-  cave: 'cave',
-  airplane: 'airplane',
-  airport: 'airport',
-  forest: 'forest',
-  beach: 'beach',
-  'city-street': 'city_street',
-  'medical-office': 'medical_office',
-  'presentation-room': 'presentation_room',
-  custom: 'custom'
+// Template to Environment Mapping per specification
+const ENVIRONMENT_MAP = {
+  'living-room': 'living_room',
+  'road-with-skyscrapers': 'city-street',
+  'rooftop': 'rooftop',
+  'cliff-edge': 'cliff-edge',
+  'building': 'building',
+  'elevator': 'elevator',
+  'airplane': 'airplane',
+  'airport': 'airport'
 };
 
-const normalizeEnvironmentForUnity = (environment) => {
-  if (!environment) return 'custom';
-
-  if (typeof environment === 'object') {
-    const envType = environment.type || environment.id || environment.name;
-    return UNITY_ENVIRONMENT_MAP[envType] || String(envType || 'custom').replace(/-/g, '_');
+// Map intensity level (1-10) to float (0.0-1.0)
+const mapIntensity = (level) => {
+  const intensityNum = Number(level);
+  if (isNaN(intensityNum) || intensityNum < 1 || intensityNum > 10) {
+    console.warn(`Invalid intensity ${level}, defaulting to 0.5`);
+    return 0.5;
   }
-
-  return UNITY_ENVIRONMENT_MAP[environment] || String(environment).replace(/-/g, '_');
+  return (intensityNum - 1) / 9;
 };
 
+// Helper: Convert value to Vector3 format
 const toVector3 = (value, fallback = { x: 0, y: 0, z: 0 }) => {
   if (Array.isArray(value)) {
     return {
@@ -62,95 +58,190 @@ const toVector3 = (value, fallback = { x: 0, y: 0, z: 0 }) => {
   return { ...fallback };
 };
 
+// Normalize scene object format per spec
 const normalizeSceneObject = (obj = {}) => {
-  const normalized = {
-    ...obj,
-    position: toVector3(obj.position)
-  };
-
-  if (obj.rotation !== undefined) {
-    normalized.rotation = toVector3(obj.rotation);
+  if (!obj.id) {
+    obj.id = `obj_${Math.random().toString(36).substr(2, 9)}`;
   }
-
-  if (obj.scale !== undefined) {
-    if (typeof obj.scale === 'number') {
-      normalized.scale = { x: obj.scale, y: obj.scale, z: obj.scale };
-    } else {
-      normalized.scale = toVector3(obj.scale, { x: 1, y: 1, z: 1 });
-    }
-  }
-
-  return normalized;
-};
-
-const normalizeSceneForUnity = (sceneJSON = {}) => {
-  const camera = sceneJSON.camera || {};
-  const startPosition = camera.startPosition || { x: 0, y: 1.6, z: 0 };
 
   return {
-    environment: normalizeEnvironmentForUnity(sceneJSON.environment),
-    objects: Array.isArray(sceneJSON.objects)
-      ? sceneJSON.objects.map(normalizeSceneObject)
-      : [],
-    triggers: Array.isArray(sceneJSON.triggers)
-      ? sceneJSON.triggers.map((trigger) => ({
-          ...trigger,
-          position: toVector3(trigger.position)
-        }))
-      : [],
-    camera: {
-      startPosition: toVector3(startPosition, { x: 0, y: 1.6, z: 0 }),
-      allowMovement: camera.allowMovement !== undefined ? Boolean(camera.allowMovement) : true
-    }
+    id: obj.id,
+    type: obj.type || 'unknown',
+    position: toVector3(obj.position),
+    ...(obj.rotation && { rotation: toVector3(obj.rotation) }),
+    ...(obj.scale && { scale: toVector3(obj.scale) })
+  };
+};
+
+// Build scene request matching spec format
+const buildSceneRequest = (sceneJSON, intensity) => {
+  return {
+    scene: {
+      environment: String(sceneJSON.environment || 'unknown'),
+      objects: Array.isArray(sceneJSON.objects)
+        ? sceneJSON.objects.map(normalizeSceneObject)
+        : [],
+      triggers: Array.isArray(sceneJSON.triggers)
+        ? sceneJSON.triggers.map((t) => ({
+            type: t.type || 'unknown',
+            count: t.count || 1,
+            behavior: t.behavior || 'static',
+            position: t.position ? toVector3(t.position) : { x: 0, y: 0, z: 0 }
+          }))
+        : []
+    },
+    intensity: mapIntensity(intensity),
+    timestamp: new Date().toISOString(),
+    requestPreview: true
   };
 };
 
 /**
- * Send scene configuration to Unity for building
+ * Check Unity server health before any operations
+ * Per spec: All build requests must be preceded by a health check
  * 
- * @param {Object} sceneJSON - Scene configuration object
- * @returns {Object} Response from Unity server
+ * @returns {Object} Status object with available flag
  */
-const sendSceneToUnity = async (sceneJSON) => {
+const checkUnityHealth = async () => {
   try {
-    console.log(`📤 Sending scene to Unity at ${UNITY_SERVER_URL}`);
-    const normalizedScene = normalizeSceneForUnity(sceneJSON);
-    console.log('   Unity environment:', normalizedScene.environment);
+    console.log(`🔍 Checking Unity health at ${UNITY_SERVER_URL}/status`);
+    const response = await axios.get(`${UNITY_SERVER_URL}/status`, {
+      timeout: HEALTH_CHECK_TIMEOUT
+    });
+
+    const { status, version, capabilities } = response.data;
     
+    if (status !== 'ready') {
+      console.warn(`⚠️  Unity status is "${status}", not "ready"`);
+      return {
+        available: false,
+        status,
+        reason: `Unity not ready: ${status}`
+      };
+    }
+
+    console.log(`✅ Unity is ready (v${version})`);
+    return {
+      available: true,
+      status: 'ready',
+      version,
+      capabilities: capabilities || []
+    };
+
+  } catch (error) {
+    if (error.code === 'ECONNREFUSED') {
+      console.error('❌ Unity connection refused - server not running');
+      return {
+        available: false,
+        status: 'unavailable',
+        reason: 'Connection refused - Unity server not running at ' + UNITY_SERVER_URL
+      };
+    }
+
+    if (error.code === 'ETIMEDOUT') {
+      console.error('❌ Unity health check timeout');
+      return {
+        available: false,
+        status: 'timeout',
+        reason: 'Health check timeout - Unity may be unresponsive'
+      };
+    }
+
+    console.error('❌ Unity health check failed:', error.message);
+    return {
+      available: false,
+      status: 'error',
+      reason: error.message
+    };
+  }
+};
+
+/**
+ * Send scene configuration to Unity for building
+ * Per spec: Always call checkUnityHealth() first, then POST to /build-scene
+ * 
+ * @param {Object} sceneJSON - Scene configuration (environment as string, no camera)
+ * @param {number} intensity - Intensity level 1-10 (will be mapped to 0.0-1.0)
+ * @returns {Object} Unity response with status and previewURL
+ * @throws {Error} If Unity is not ready or request fails
+ */
+const sendSceneToUnity = async (sceneJSON, intensity = 5) => {
+  // Step 1: Check Unity health per spec
+  const health = await checkUnityHealth();
+  if (!health.available) {
+    const error = new Error(`Unity not ready: ${health.reason}`);
+    error.httpStatus = 503;
+    throw error;
+  }
+
+  try {
+    // Step 2: Build request body per spec
+    const requestBody = buildSceneRequest(sceneJSON, intensity);
+
+    console.log(`📤 Sending scene build request to Unity`);
+    console.log(`   Environment: ${requestBody.scene.environment}`);
+    console.log(`   Objects: ${requestBody.scene.objects.length}`);
+    console.log(`   Intensity: ${requestBody.intensity}`);
+
+    // Step 3: POST to /build-scene
     const response = await axios.post(
       `${UNITY_SERVER_URL}/build-scene`,
-      {
-        scene: normalizedScene,
-        timestamp: new Date().toISOString(),
-        requestPreview: true
-      },
+      requestBody,
       {
         timeout: UNITY_TIMEOUT,
-        headers: {
-          'Content-Type': 'application/json'
-        }
+        headers: { 'Content-Type': 'application/json' }
       }
     );
 
-    console.log('✅ Unity response received');
-    return response.data;
+    // Step 4: Validate response per spec
+    if (!response.data) {
+      throw new Error('Empty response from Unity');
+    }
+
+    const { status, error: unityError, previewURL } = response.data;
+
+    if (status === 'error' || unityError) {
+      const err = new Error(`Unity build failed: ${unityError || 'unknown error'}`);
+      err.httpStatus = 502;
+      throw err;
+    }
+
+    console.log(`✅ Unity build successful - preview: ${previewURL || 'none'}`);
+
+    return {
+      status: status || 'ok',
+      previewURL: previewURL || null,
+      timestamp: new Date().toISOString()
+    };
 
   } catch (error) {
-    // Handle specific error cases
+    if (error.httpStatus) {
+      throw error;
+    }
+
     if (error.code === 'ECONNREFUSED') {
-      console.warn('⚠️ Unity server not available at', UNITY_SERVER_URL);
-      throw new Error('Unity server is not running. Please start the Unity application.');
+      const err = new Error('Unity server not running');
+      err.httpStatus = 503;
+      throw err;
     }
-    
+
     if (error.code === 'ETIMEDOUT') {
-      throw new Error('Unity scene building timed out. The scene may be too complex.');
+      const err = new Error('Scene build timed out - Unity may be overloaded');
+      err.httpStatus = 504;
+      throw err;
     }
 
-    if (error.response) {
-      throw new Error(`Unity error: ${error.response.data.message || error.response.statusText}`);
+    if (error.response?.data) {
+      const err = new Error(`Unity error: ${JSON.stringify(error.response.data)}`);
+      err.httpStatus = 502;
+      throw err;
     }
 
-    throw error;
+    // Log full error for debugging per spec
+    console.error('Scene send error:', error.message);
+    const err = new Error(`Failed to build scene: ${error.message}`);
+    err.httpStatus = 500;
+    throw err;
   }
 };
 
@@ -338,9 +429,14 @@ const getDefaultAssets = (category) => {
 };
 
 module.exports = {
+  // Core spec-compliant functions
   sendSceneToUnity,
+  checkUnityHealth,
+  mapIntensity,
+  ENVIRONMENT_MAP,
+  
+  // Existing utilities (kept for backward compatibility)
   requestPreview,
-  checkUnityStatus,
   sendCommand,
   streamPreview,
   getAvailableAssets

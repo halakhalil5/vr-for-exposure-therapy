@@ -9,6 +9,102 @@ const OpenAI = require('openai');
 
 const DISALLOWED_OBJECT_TERMS = ['floor', 'room', 'wall', 'walls', 'camera', 'furniture'];
 
+const parseRequestedCount = (text, label) => {
+  if (!text) return null;
+
+  const normalized = String(text).toLowerCase();
+  const numberWords = {
+    one: 1,
+    two: 2,
+    three: 3,
+    four: 4,
+    five: 5,
+    six: 6,
+    seven: 7,
+    eight: 8,
+    nine: 9,
+    ten: 10
+  };
+
+  const numberRegex = new RegExp(`\\b(\\d+)\\s+${label}s?\\b`, 'i');
+  const numberMatch = normalized.match(numberRegex);
+  if (numberMatch) {
+    return Number(numberMatch[1]);
+  }
+
+  for (const [word, value] of Object.entries(numberWords)) {
+    const wordRegex = new RegExp(`\\b${word}\\s+${label}s?\\b`, 'i');
+    if (wordRegex.test(normalized)) {
+      return value;
+    }
+  }
+
+  return null;
+};
+
+const extractExplicitRequests = (instructions = '') => {
+  const spiderCount = parseRequestedCount(instructions, 'spider');
+  const maleDoctorCount = parseRequestedCount(instructions, 'male doctor');
+
+  return {
+    spiderCount,
+    maleDoctorCount
+  };
+};
+
+const upsertTriggerCount = (triggers = [], triggerType, count) => {
+  if (!Number.isFinite(count)) return triggers;
+
+  const normalizedType = String(triggerType).toLowerCase();
+  const existingIndex = triggers.findIndex((trigger) =>
+    String(trigger?.type || '').toLowerCase().includes(normalizedType)
+  );
+
+  if (existingIndex >= 0) {
+    const updated = [...triggers];
+    updated[existingIndex] = {
+      ...updated[existingIndex],
+      count: Math.max(1, count)
+    };
+    return updated;
+  }
+
+  return [
+    ...triggers,
+    {
+      type: triggerType,
+      count: Math.max(1, count),
+      behavior: 'static',
+      spawnArea: { minX: -2, maxX: 2, minZ: 2, maxZ: 6 }
+    }
+  ];
+};
+
+const ensureMaleDoctorObjects = (objects = [], count = 0) => {
+  if (!Number.isFinite(count) || count <= 0) return objects;
+
+  const existing = objects.filter((obj) => {
+    const typeText = String(obj?.type || '').toLowerCase();
+    const nameText = String(obj?.name || '').toLowerCase();
+    return typeText.includes('doctor') || nameText.includes('male_doctor') || nameText.includes('male doctor');
+  });
+
+  if (existing.length >= count) return objects;
+
+  const needed = count - existing.length;
+  const additions = Array.from({ length: needed }, (_, idx) => ({
+    id: `male_doctor_${idx + 1}`,
+    type: 'person',
+    name: 'male_doctor',
+    position: { x: 0.5 + idx, y: 0, z: 2.5 + idx * 0.5 },
+    rotation: { x: 0, y: 180, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    properties: { role: 'doctor', gender: 'male' }
+  }));
+
+  return [...objects, ...additions];
+};
+
 // Initialize OpenAI client (will use OPENAI_API_KEY from env)
 let openai = null;
 
@@ -24,9 +120,10 @@ const initializeClient = () => {
   return openai;
 };
 
-const normalizeSceneShape = (scene = {}, selectedEnvironment) => {
+const normalizeSceneShape = (scene = {}, selectedEnvironment, customInstructions = '') => {
   const rawEnvironment = scene.environment;
   let normalizedEnvironment = selectedEnvironment;
+  const explicitRequests = extractExplicitRequests(customInstructions);
 
   if (typeof rawEnvironment === 'string' && rawEnvironment.trim()) {
     normalizedEnvironment = rawEnvironment.trim();
@@ -49,10 +146,21 @@ const normalizeSceneShape = (scene = {}, selectedEnvironment) => {
         })
     : [];
 
+  const objectsWithRequests = ensureMaleDoctorObjects(
+    normalizedObjects,
+    explicitRequests.maleDoctorCount || 0
+  );
+
+  const normalizedTriggers = Array.isArray(scene.triggers) ? scene.triggers : [];
+  const triggersWithRequests = explicitRequests.spiderCount
+    ? upsertTriggerCount(normalizedTriggers, 'spider', explicitRequests.spiderCount)
+    : normalizedTriggers;
+
   return {
     ...scene,
     environment: normalizedEnvironment,
-    objects: normalizedObjects,
+    objects: objectsWithRequests,
+    triggers: triggersWithRequests,
     camera: undefined
   };
 };
@@ -82,7 +190,7 @@ const generateSceneConfiguration = async ({
   if (client) {
     try {
       const generated = await generateWithOpenAI(phobia, intensity, environment, objectCounts, customInstructions, sceneTemplate);
-      return normalizeSceneShape(generated, environment);
+      return normalizeSceneShape(generated, environment, customInstructions);
     } catch (error) {
       console.warn('OpenAI generation failed, using fallback:', error.message);
     }
@@ -91,7 +199,8 @@ const generateSceneConfiguration = async ({
   // Fallback to rule-based generation
   return normalizeSceneShape(
     generateFallbackScene(phobia, intensity, environment, objectCounts),
-    environment
+    environment,
+    customInstructions
   );
 };
 
@@ -140,6 +249,7 @@ Generate a JSON scene configuration with this structure:
 Requirements:
 - Set environment exactly to "${environment}" as a string (not an object).
 - Include objects that match the therapist instructions.
+- If therapist instructions specify exact quantities (for example "one spider" or "one male doctor"), honor those counts exactly.
 - Do not include an environment field inside individual objects.
 - Do not include objects whose type or name represents floor, room, walls, camera, or furniture.
 - Do not include a top-level camera field in the scene JSON.

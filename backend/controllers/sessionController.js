@@ -10,10 +10,11 @@ const Patient = require('../models/Patient');
 const { asyncHandler, ApiError } = require('../middleware/errorHandler');
 
 const TEMPLATE_TO_ENVIRONMENT = {
-  'living-room': 'indoor-room',
+  'living-room': 'living-room',
   'road-with-skyscrappers': 'city-street',
   rooftop: 'rooftop',
   'cliff-edge': 'cliff-edge',
+  building: 'building',
   cave: 'cave',
   elevator: 'elevator',
   airplane: 'airplane',

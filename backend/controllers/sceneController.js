@@ -19,7 +19,7 @@ const SCENE_TEMPLATES = [
   {
     id: 'living-room',
     name: 'Living Room',
-    environment: 'indoor-room',
+    environment: 'living-room',
     description: 'Comfortable indoor home setting'
   },
   {
@@ -39,6 +39,12 @@ const SCENE_TEMPLATES = [
     name: 'Cliff edge',
     environment: 'cliff-edge',
     description: 'Natural cliff edge with steep drop'
+  },
+  {
+    id: 'building',
+    name: 'Building',
+    environment: 'building',
+    description: 'Multi-floor building environment with interior corridors'
   },
   {
     id: 'cave',
@@ -202,7 +208,7 @@ const generateScene = asyncHandler(async (req, res) => {
     let previewURL = null;
     try {
       console.log('📤 Sending scene to Unity...');
-      const unityResponse = await unityService.sendSceneToUnity(sceneJSON);
+      const unityResponse = await unityService.sendSceneToUnity(sceneJSON, Number(intensity));
       
       if (unityResponse && unityResponse.previewURL) {
         previewURL = unityResponse.previewURL;
@@ -304,9 +310,10 @@ const receiveScenePreview = asyncHandler(async (req, res) => {
  * POST /api/build-scene
  */
 const buildScene = asyncHandler(async (req, res) => {
-  const { sessionId, sceneJSON } = req.body;
+  const { sessionId, sceneJSON, intensity } = req.body;
 
   let sceneConfig = sceneJSON;
+  let sessionIntensity = intensity;
 
   // If sessionId provided, get scene from session
   if (sessionId && !sceneJSON) {
@@ -315,6 +322,7 @@ const buildScene = asyncHandler(async (req, res) => {
       throw new ApiError('Session not found', 404);
     }
     sceneConfig = session.sceneJSON;
+    sessionIntensity = intensity || session.intensity || 5;
   }
 
   if (!sceneConfig) {
@@ -323,7 +331,7 @@ const buildScene = asyncHandler(async (req, res) => {
 
   try {
     console.log('🏗️ Sending scene to Unity for building...');
-    const result = await unityService.sendSceneToUnity(sceneConfig);
+    const result = await unityService.sendSceneToUnity(sceneConfig, Number(sessionIntensity));
 
     res.json({
       message: 'Scene sent to Unity successfully',

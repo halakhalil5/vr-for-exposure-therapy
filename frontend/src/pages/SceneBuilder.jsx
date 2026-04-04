@@ -18,10 +18,11 @@ import ScenePreview from '../components/ScenePreview';
 import toast from 'react-hot-toast';
 
 const TEMPLATE_TO_ENVIRONMENT = {
-  'living-room': 'indoor-room',
+  'living-room': 'living-room',
   'road-with-skyscrappers': 'city-street',
   rooftop: 'rooftop',
   'cliff-edge': 'cliff-edge',
+  building: 'building',
   cave: 'cave',
   elevator: 'elevator',
   airplane: 'airplane',
@@ -29,10 +30,12 @@ const TEMPLATE_TO_ENVIRONMENT = {
 };
 
 const ENVIRONMENT_TO_TEMPLATE = {
+  'living-room': 'living-room',
   'indoor-room': 'living-room',
   'city-street': 'road-with-skyscrappers',
   rooftop: 'rooftop',
   'cliff-edge': 'cliff-edge',
+  building: 'building',
   cave: 'cave',
   elevator: 'elevator',
   airplane: 'airplane',
@@ -52,7 +55,7 @@ const SceneBuilder = () => {
     phobia: '',
     intensity: 5,
     sceneTemplate: 'living-room',
-    environment: 'indoor-room',
+    environment: 'living-room',
     sceneDescription: ''
   });
   const [sceneJSON, setSceneJSON] = useState(null);

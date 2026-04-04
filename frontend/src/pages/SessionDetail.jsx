@@ -16,15 +16,17 @@ import {
   FiActivity
 } from 'react-icons/fi';
 import { format } from 'date-fns';
-import { sessionAPI } from '../services/api';
+import { sceneAPI, sessionAPI } from '../services/api';
 import ScenePreview from '../components/ScenePreview';
 import BiofeedbackDisplay from '../components/BiofeedbackDisplay';
+import toast from 'react-hot-toast';
 
 const SessionDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const [session, setSession] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isStarting, setIsStarting] = useState(false);
 
   // Load session
   useEffect(() => {
@@ -47,10 +49,19 @@ const SessionDetail = () => {
   // Status actions
   const handleStart = async () => {
     try {
+      setIsStarting(true);
+      // Load this session's configured scene into Unity before marking the session in progress.
+      await sceneAPI.build({
+        sessionId: id,
+        intensity: session?.intensity || 5
+      });
       await sessionAPI.start(id);
       setSession(prev => ({ ...prev, status: 'in-progress' }));
     } catch (error) {
       console.error('Error starting session:', error);
+      toast.error(error?.response?.data?.message || 'Failed to load scene in Unity');
+    } finally {
+      setIsStarting(false);
     }
   };
 
@@ -140,9 +151,13 @@ const SessionDetail = () => {
           </span>
           
           {session.status === 'scheduled' && (
-            <button onClick={handleStart} className="btn-primary flex items-center space-x-2">
+            <button
+              onClick={handleStart}
+              disabled={isStarting}
+              className="btn-primary flex items-center space-x-2 disabled:opacity-60"
+            >
               <FiPlay className="w-4 h-4" />
-              <span>Start Session</span>
+              <span>{isStarting ? 'Loading Scene...' : 'Start Session'}</span>
             </button>
           )}
           

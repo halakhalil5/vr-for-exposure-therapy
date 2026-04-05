@@ -27,7 +27,8 @@ const TEMPLATE_TO_ENVIRONMENT = {
   cave: 'cave',
   elevator: 'elevator',
   airplane: 'airplane',
-  airport: 'airport'
+  airport: 'airport',
+  'picture-room': 'picture-room'
 };
 
 const ENVIRONMENT_TO_TEMPLATE = {
@@ -40,8 +41,19 @@ const ENVIRONMENT_TO_TEMPLATE = {
   cave: 'cave',
   elevator: 'elevator',
   airplane: 'airplane',
-  airport: 'airport'
+  airport: 'airport',
+  'picture-room': 'picture-room'
 };
+
+const PICTURE_ROOM_PROMPT_TEMPLATE = [
+  'picture 1 prompt:',
+  'picture 2 prompt:',
+  'picture 3 prompt:',
+  'picture 4 prompt:',
+  'picture 5 prompt:',
+  'picture 6 prompt:',
+  'picture 7 prompt:'
+].join('\n');
 
 const SceneBuilder = () => {
   const navigate = useNavigate();
@@ -250,6 +262,7 @@ const SceneBuilder = () => {
   };
 
   const selectedPatientData = patients.find(patient => patient._id === selectedPatient);
+  const isPictureRoomTemplate = sessionConfig.sceneTemplate === 'picture-room';
 
   return (
     <div className="space-y-6">
@@ -368,6 +381,10 @@ const SceneBuilder = () => {
                     onClick={() => {
                       handleConfigChange('sceneTemplate', template.id);
                       handleConfigChange('environment', TEMPLATE_TO_ENVIRONMENT[template.id] || template.environment);
+
+                      if (template.id === 'picture-room') {
+                        handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
+                      }
                     }}
                     className={`p-3 rounded-lg border-2 text-left transition-all ${
                       sessionConfig.sceneTemplate === template.id
@@ -377,12 +394,18 @@ const SceneBuilder = () => {
                   >
                     <p className="font-medium text-sm text-gray-900">{template.name}</p>
                     <p className="text-xs text-gray-500 mt-1">{template.description}</p>
+                    {template.recommendedFor === 'arachnophobia' && (
+                      <p className="text-xs font-semibold text-emerald-700 mt-2">
+                        Recommended for arachnophobia
+                      </p>
+                    )}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Intensity Slider */}
+            {!isPictureRoomTemplate && (
             <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div>
@@ -414,6 +437,7 @@ const SceneBuilder = () => {
                 <span>Maximum</span>
               </div>
             </div>
+            )}
 
             {/* Scene Description */}
             <div className="rounded-xl border border-gray-200 bg-white p-4">
@@ -421,11 +445,15 @@ const SceneBuilder = () => {
               <textarea
                 value={sessionConfig.sceneDescription}
                 onChange={(e) => handleConfigChange('sceneDescription', e.target.value)}
-                placeholder="Describe the scene in detail for this patient and session intensity...&#10;&#10;Examples:&#10;• Start near the entrance with clear exits visible&#10;• Keep initial trigger distance moderate, then gradually reduce&#10;• Maintain calm ambient sounds and neutral lighting"
+                placeholder={isPictureRoomTemplate
+                  ? PICTURE_ROOM_PROMPT_TEMPLATE
+                  : 'Describe the scene in detail for this patient and session intensity...\n\nExamples:\n• Start near the entrance with clear exits visible\n• Keep initial trigger distance moderate, then gradually reduce\n• Maintain calm ambient sounds and neutral lighting'}
                 className="form-textarea w-full h-32 text-sm"
               />
               <p className="text-xs text-gray-500 mt-2">
-                This description guides AI scene generation while keeping the selected template.
+                {isPictureRoomTemplate
+                  ? 'Fill all seven picture prompts. These prompts are included in the environment payload sent to Unity.'
+                  : 'This description guides AI scene generation while keeping the selected template.'}
               </p>
             </div>
           </div>

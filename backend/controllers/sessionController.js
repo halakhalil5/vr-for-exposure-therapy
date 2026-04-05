@@ -18,7 +18,8 @@ const TEMPLATE_TO_ENVIRONMENT = {
   cave: 'cave',
   elevator: 'elevator',
   airplane: 'airplane',
-  airport: 'airport'
+  airport: 'airport',
+  'picture-room': 'picture-room'
 };
 
 /**

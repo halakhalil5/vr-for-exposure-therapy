@@ -7,7 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "dev:server": "nodemon server.js",
-    "test": "jest"
+    "test": "node --test"
   },
   "keywords": [
     "vr",

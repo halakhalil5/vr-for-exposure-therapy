@@ -8,6 +8,7 @@
 const Session = require('../models/Session');
 const { asyncHandler, ApiError } = require('../middleware/errorHandler');
 const llmService = require('../services/llmService');
+const aiPlacementService = require('../services/aiPlacementService');
 const unityService = require('../services/unityService');
 const path = require('path');
 const fs = require('fs');
@@ -69,8 +70,40 @@ const SCENE_TEMPLATES = [
     name: 'Airport',
     environment: 'airport',
     description: 'Airport terminal and boarding context'
+  },
+  {
+    id: 'picture-room',
+    name: 'Picture Room',
+    environment: 'picture-room',
+    description: 'Prompt-driven room where seven pictures are defined by therapist text',
+    recommendedFor: 'arachnophobia'
   }
 ];
+
+const extractPicturePrompts = (sceneDescription = '') => {
+  return Array.from({ length: 7 }, (_, idx) => {
+    const pictureNumber = idx + 1;
+    const matcher = new RegExp(`picture\\s*${pictureNumber}\\s*prompt\\s*:\\s*(.*)`, 'i');
+    const match = String(sceneDescription).match(matcher);
+
+    return {
+      picture: pictureNumber,
+      prompt: match?.[1]?.trim() || ''
+    };
+  });
+};
+
+const applyPictureRoomEnvironment = (sceneJSON = {}, sceneDescription = '') => {
+  const picturePrompts = extractPicturePrompts(sceneDescription);
+
+  return {
+    ...sceneJSON,
+    environment: {
+      type: 'picture-room',
+      picturePrompts
+    }
+  };
+};
 
 // Ensure uploads directory exists
 const uploadsDir = path.join(__dirname, '..', 'uploads', 'previews');
@@ -187,6 +220,10 @@ const generateScene = asyncHandler(async (req, res) => {
         objectCounts,
         customInstructions
       });
+    }
+
+    if (sceneTemplate === 'picture-room' || resolvedEnvironment === 'picture-room') {
+      sceneJSON = applyPictureRoomEnvironment(sceneJSON, sceneDescription || customInstructions || '');
     }
 
     // If sessionId provided, update the session
@@ -400,10 +437,63 @@ const validateScene = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * Generate object placements from Unity screenshots and inventory context.
+ * POST /api/ai-placement
+ */
+const generateAIPlacement = asyncHandler(async (req, res) => {
+  try {
+    const placements = await aiPlacementService.generateAIPlacements(req.body, {
+      httpReferer: req.get('HTTP-Referer') || req.get('Referer'),
+      xTitle: req.get('X-Title')
+    });
+    return res.status(200).json(placements);
+  } catch (error) {
+    const statusCode = Number(error?.statusCode) || 500;
+    const safeMessage = statusCode === 400
+      ? error.message
+      : statusCode === 502
+        ? 'AI provider request failed'
+        : 'AI placement failed';
+
+    return res.status(statusCode).json({
+      status: 'error',
+      error: safeMessage
+    });
+  }
+});
+
+/**
+ * Lightweight parser/extraction test endpoint for placement payload handling.
+ * POST /api/ai-placement/test-extraction
+ */
+const testAIPlacementExtraction = asyncHandler(async (req, res) => {
+  const { modelOutput, objectsToPlace = [], sceneInventory, intensity = 0.5 } = req.body || {};
+
+  if (modelOutput == null) {
+    return res.status(400).json({ status: 'error', error: 'modelOutput is required' });
+  }
+
+  if (!sceneInventory || typeof sceneInventory !== 'object') {
+    return res.status(400).json({ status: 'error', error: 'sceneInventory is required' });
+  }
+
+  const placements = aiPlacementService.normalizeModelPlacements({
+    modelOutput,
+    objectsToPlace,
+    sceneInventory,
+    intensity: Number(intensity)
+  });
+
+  return res.status(200).json(placements);
+});
+
 module.exports = {
   generateScene,
   receiveScenePreview,
   buildScene,
   getSceneTemplates,
-  validateScene
+  validateScene,
+  generateAIPlacement,
+  testAIPlacementExtraction
 };

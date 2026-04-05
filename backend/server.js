@@ -126,7 +126,9 @@ app.listen(PORT, () => {
    - GET  /api/patients        - List all patients
    - POST /api/sessions        - Create VR session
    - POST /api/generate-scene  - Generate scene via LLM
+  - POST /api/ai-placement    - AI object placement from screenshots
    - POST /api/scene-preview   - Receive Unity preview
+  - POST /api/ai-placement/test-extraction - Validate placement parsing
    - GET  /api/reports/:id     - Get patient reports
   `);
 });

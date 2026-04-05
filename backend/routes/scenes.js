@@ -11,7 +11,9 @@ const {
   receiveScenePreview,
   buildScene,
   getSceneTemplates,
-  validateScene
+  validateScene,
+  generateAIPlacement,
+  testAIPlacementExtraction
 } = require('../controllers/sceneController');
 
 // POST /api/generate-scene - Generate VR scene using LLM
@@ -28,5 +30,11 @@ router.get('/scene-templates', getSceneTemplates);
 
 // POST /api/validate-scene - Validate scene configuration
 router.post('/validate-scene', validateScene);
+
+// POST /api/ai-placement - AI-assisted Unity placement from screenshots
+router.post('/ai-placement', generateAIPlacement);
+
+// POST /api/ai-placement/test-extraction - Parser/validation test helper
+router.post('/ai-placement/test-extraction', testAIPlacementExtraction);
 
 module.exports = router;

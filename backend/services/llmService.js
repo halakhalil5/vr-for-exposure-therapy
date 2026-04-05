@@ -105,6 +105,31 @@ const ensureMaleDoctorObjects = (objects = [], count = 0) => {
   return [...objects, ...additions];
 };
 
+const ensureSpiderObjects = (objects = [], count = 0) => {
+  if (!Number.isFinite(count) || count <= 0) return objects;
+
+  const existing = objects.filter((obj) => {
+    const typeText = String(obj?.type || '').toLowerCase();
+    const nameText = String(obj?.name || '').toLowerCase();
+    return typeText.includes('spider') || nameText.includes('spider');
+  });
+
+  if (existing.length >= count) return objects;
+
+  const needed = count - existing.length;
+  const additions = Array.from({ length: needed }, (_, idx) => ({
+    id: `spider_${idx + 1}`,
+    type: 'spider',
+    name: 'spider',
+    position: { x: -0.5 + idx * 0.6, y: 0, z: 2.8 + idx * 0.4 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    properties: { behavior: 'static' }
+  }));
+
+  return [...objects, ...additions];
+};
+
 // Initialize OpenAI client (will use OPENAI_API_KEY from env)
 let openai = null;
 
@@ -146,9 +171,14 @@ const normalizeSceneShape = (scene = {}, selectedEnvironment, customInstructions
         })
     : [];
 
-  const objectsWithRequests = ensureMaleDoctorObjects(
+  const objectsWithDoctors = ensureMaleDoctorObjects(
     normalizedObjects,
     explicitRequests.maleDoctorCount || 0
+  );
+
+  const objectsWithRequests = ensureSpiderObjects(
+    objectsWithDoctors,
+    explicitRequests.spiderCount || 0
   );
 
   const normalizedTriggers = Array.isArray(scene.triggers) ? scene.triggers : [];

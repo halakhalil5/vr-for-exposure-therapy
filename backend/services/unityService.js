@@ -75,9 +75,14 @@ const normalizeSceneObject = (obj = {}) => {
 
 // Build scene request matching spec format
 const buildSceneRequest = (sceneJSON, intensity) => {
+  const environmentValue =
+    sceneJSON.environment && typeof sceneJSON.environment === 'object'
+      ? sceneJSON.environment
+      : String(sceneJSON.environment || 'unknown');
+
   return {
     scene: {
-      environment: String(sceneJSON.environment || 'unknown'),
+      environment: environmentValue,
       objects: Array.isArray(sceneJSON.objects)
         ? sceneJSON.objects.map(normalizeSceneObject)
         : [],

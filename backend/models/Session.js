@@ -107,6 +107,7 @@ const sessionSchema = new mongoose.Schema({
         'cave',              // Cave environment
         'airplane',          // Inside airplane
         'airport',           // Airport terminal
+        'picture-room',      // Picture prompt environment
         'forest',            // Forest environment
         'beach',             // Beach setting
         'city-street',       // Urban street
@@ -129,7 +130,8 @@ const sessionSchema = new mongoose.Schema({
       'cave',
       'elevator',
       'airplane',
-      'airport'
+      'airport',
+      'picture-room'
     ]
   },
 

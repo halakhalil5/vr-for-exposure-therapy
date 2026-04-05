@@ -99,7 +99,7 @@ const applyPictureRoomEnvironment = (sceneJSON = {}, sceneDescription = '') => {
   return {
     ...sceneJSON,
     environment: {
-      type: 'picture-room',
+      environment: 'picture-room',
       picturePrompts
     }
   };

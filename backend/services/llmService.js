@@ -132,16 +132,42 @@ const ensureSpiderObjects = (objects = [], count = 0) => {
 
 // Initialize OpenAI client (will use OPENAI_API_KEY from env)
 let openai = null;
+let llmProvider = 'openai';
 
 /**
  * Initialize OpenAI client
  */
 const initializeClient = () => {
-  if (!openai && process.env.OPENAI_API_KEY) {
+  if (openai) {
+    return openai;
+  }
+
+  const openRouterKey = process.env.OPENROUTER_API_KEY;
+  const openAIKey = process.env.OPENAI_API_KEY;
+
+  // Backward compatibility: if OPENAI_API_KEY contains an OpenRouter key, route via OpenRouter.
+  const openRouterCompatKey = !openRouterKey && typeof openAIKey === 'string' && openAIKey.startsWith('sk-or-')
+    ? openAIKey
+    : null;
+
+  if (openRouterKey || openRouterCompatKey) {
+    llmProvider = 'openrouter';
     openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY
+      baseURL: 'https://openrouter.ai/api/v1',
+      apiKey: openRouterKey || openRouterCompatKey,
+      timeout: 40000
+    });
+    return openai;
+  }
+
+  if (openAIKey) {
+    llmProvider = 'openai';
+    openai = new OpenAI({
+      apiKey: openAIKey,
+      timeout: 40000
     });
   }
+
   return openai;
 };
 
@@ -238,6 +264,8 @@ const generateSceneConfiguration = async ({
  * Generate scene using OpenAI API
  */
 const generateWithOpenAI = async (phobia, intensity, environment, objectCounts, customInstructions, sceneTemplate) => {
+  const modelName = llmProvider === 'openrouter' ? 'openai/gpt-4o' : 'gpt-4o';
+
   const systemPrompt = `You are a VR scene designer specializing in exposure therapy environments. 
 Generate detailed JSON scene configurations for therapeutic VR experiences.
 Your scenes should be clinically appropriate, gradually exposing patients to their fears.
@@ -291,7 +319,7 @@ greater distance from triggers, and calmer environment. Higher intensity means m
 closer proximity, and potentially more dynamic/threatening scenarios.`;
 
   const response = await openai.chat.completions.create({
-    model: 'gpt-4',
+    model: modelName,
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt }

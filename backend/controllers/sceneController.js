@@ -98,10 +98,34 @@ const applyPictureRoomEnvironment = (sceneJSON = {}, sceneDescription = '') => {
 
   return {
     ...sceneJSON,
-    environment: {
-      environment: 'picture-room',
-      picturePrompts
-    }
+    environment: 'picture-room',
+    picturePrompts
+  };
+};
+
+const ensurePictureRoomPrompts = (sceneJSON = {}, sceneDescription = '') => {
+  const environmentValue =
+    sceneJSON?.environment && typeof sceneJSON.environment === 'object'
+      ? sceneJSON.environment.environment
+      : sceneJSON?.environment;
+
+  if (String(environmentValue || '') !== 'picture-room') {
+    return sceneJSON;
+  }
+
+  const hasFlatPrompts = Array.from({ length: 7 }, (_, idx) => idx + 1)
+    .some((pictureNumber) => String(sceneJSON[`picture${pictureNumber}`] || '').trim().length > 0);
+
+  const hasPromptArray = Array.isArray(sceneJSON.picturePrompts)
+    && sceneJSON.picturePrompts.some((entry) => String(entry?.prompt || '').trim().length > 0);
+
+  if (hasFlatPrompts || hasPromptArray) {
+    return sceneJSON;
+  }
+
+  return {
+    ...sceneJSON,
+    picturePrompts: extractPicturePrompts(sceneDescription)
   };
 };
 
@@ -243,9 +267,11 @@ const generateScene = asyncHandler(async (req, res) => {
 
     // Send to Unity for preview generation
     let previewURL = null;
+    let unityRequest = null;
     try {
       console.log('📤 Sending scene to Unity...');
       const unityResponse = await unityService.sendSceneToUnity(sceneJSON, Number(intensity));
+      unityRequest = unityResponse?.unityRequest || null;
       
       if (unityResponse && unityResponse.previewURL) {
         previewURL = unityResponse.previewURL;
@@ -266,6 +292,7 @@ const generateScene = asyncHandler(async (req, res) => {
       data: {
         sceneJSON,
         previewURL,
+        unityRequest,
         sessionId: session?._id
       }
     });
@@ -347,10 +374,11 @@ const receiveScenePreview = asyncHandler(async (req, res) => {
  * POST /api/build-scene
  */
 const buildScene = asyncHandler(async (req, res) => {
-  const { sessionId, sceneJSON, intensity } = req.body;
+  const { sessionId, sceneJSON, intensity, sceneDescription } = req.body;
 
   let sceneConfig = sceneJSON;
   let sessionIntensity = intensity;
+  let sourceSceneDescription = sceneDescription || '';
 
   // If sessionId provided, get scene from session
   if (sessionId && !sceneJSON) {
@@ -360,6 +388,7 @@ const buildScene = asyncHandler(async (req, res) => {
     }
     sceneConfig = session.sceneJSON;
     sessionIntensity = intensity || session.intensity || 5;
+    sourceSceneDescription = sceneDescription || session.sceneDescription || '';
   }
 
   if (!sceneConfig) {
@@ -367,12 +396,17 @@ const buildScene = asyncHandler(async (req, res) => {
   }
 
   try {
+    sceneConfig = ensurePictureRoomPrompts(sceneConfig, sourceSceneDescription);
+
     console.log('🏗️ Sending scene to Unity for building...');
     const result = await unityService.sendSceneToUnity(sceneConfig, Number(sessionIntensity));
 
     res.json({
       message: 'Scene sent to Unity successfully',
-      data: result
+      data: {
+        ...result,
+        unityRequest: result?.unityRequest || null
+      }
     });
     console.log(result);
 

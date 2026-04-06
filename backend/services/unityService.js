@@ -73,28 +73,82 @@ const normalizeSceneObject = (obj = {}) => {
   };
 };
 
-// Build scene request matching spec format
-const buildSceneRequest = (sceneJSON, intensity) => {
-  const environmentValue =
-    sceneJSON.environment && typeof sceneJSON.environment === 'object'
-      ? sceneJSON.environment
-      : String(sceneJSON.environment || 'unknown');
+const normalizePicturePrompts = (rawPrompts = []) => {
+  if (!Array.isArray(rawPrompts)) {
+    return [];
+  }
+
+  return rawPrompts.slice(0, 7).map((entry, idx) => ({
+    picture: Number(entry?.picture) || idx + 1,
+    prompt: String(entry?.prompt || '')
+  }));
+};
+
+const toPictureRoomPromptFields = (picturePrompts = []) => {
+  const fields = {};
+
+  for (let i = 1; i <= 7; i += 1) {
+    const found = picturePrompts.find((entry) => Number(entry?.picture) === i);
+    fields[`picture${i}`] = String(found?.prompt || '');
+  }
+
+  return fields;
+};
+
+const extractPictureRoomData = (sceneJSON = {}) => {
+  const rawEnvironment = sceneJSON.environment;
+  const environmentName =
+    rawEnvironment && typeof rawEnvironment === 'object'
+      ? String(rawEnvironment.environment || 'unknown')
+      : String(rawEnvironment || 'unknown');
+
+  const promptsFromArray = normalizePicturePrompts(sceneJSON.picturePrompts);
+  const promptsFromNestedArray = normalizePicturePrompts(rawEnvironment?.picturePrompts);
+  const promptsFromFlatFields = Array.from({ length: 7 }, (_, idx) => {
+    const picture = idx + 1;
+    return {
+      picture,
+      prompt: String(sceneJSON[`picture${picture}`] || '')
+    };
+  });
+
+  const picturePrompts =
+    promptsFromArray.some((entry) => entry.prompt)
+      ? promptsFromArray
+      : promptsFromNestedArray.some((entry) => entry.prompt)
+        ? promptsFromNestedArray
+        : promptsFromFlatFields;
 
   return {
-    scene: {
-      environment: environmentValue,
-      objects: Array.isArray(sceneJSON.objects)
-        ? sceneJSON.objects.map(normalizeSceneObject)
-        : [],
-      triggers: Array.isArray(sceneJSON.triggers)
-        ? sceneJSON.triggers.map((t) => ({
-            type: t.type || 'unknown',
-            count: t.count || 1,
-            behavior: t.behavior || 'static',
-            position: t.position ? toVector3(t.position) : { x: 0, y: 0, z: 0 }
-          }))
-        : []
-    },
+    environmentName,
+    picturePrompts
+  };
+};
+
+// Build scene request matching spec format
+const buildSceneRequest = (sceneJSON, intensity) => {
+  const { environmentName, picturePrompts } = extractPictureRoomData(sceneJSON);
+  const scenePayload = {
+    environment: environmentName,
+    objects: Array.isArray(sceneJSON.objects)
+      ? sceneJSON.objects.map(normalizeSceneObject)
+      : [],
+    triggers: Array.isArray(sceneJSON.triggers)
+      ? sceneJSON.triggers.map((t) => ({
+          type: t.type || 'unknown',
+          count: t.count || 1,
+          behavior: t.behavior || 'static',
+          position: t.position ? toVector3(t.position) : { x: 0, y: 0, z: 0 }
+        }))
+      : []
+  };
+
+  if (environmentName === 'picture-room') {
+    Object.assign(scenePayload, toPictureRoomPromptFields(picturePrompts));
+  }
+
+  return {
+    scene: scenePayload,
     intensity: mapIntensity(intensity),
     timestamp: new Date().toISOString(),
     requestPreview: true
@@ -187,6 +241,8 @@ const sendSceneToUnity = async (sceneJSON, intensity = 5) => {
     console.log(`   Environment: ${requestBody.scene.environment}`);
     console.log(`   Objects: ${requestBody.scene.objects.length}`);
     console.log(`   Intensity: ${requestBody.intensity}`);
+    console.log('🧾 Unity request payload:');
+    console.log(JSON.stringify(requestBody, null, 2));
 
     // Step 3: POST to /build-scene
     const response = await axios.post(
@@ -216,7 +272,8 @@ const sendSceneToUnity = async (sceneJSON, intensity = 5) => {
     return {
       status: status || 'ok',
       previewURL: previewURL || null,
-      timestamp: new Date().toISOString()
+      timestamp: new Date().toISOString(),
+      unityRequest: requestBody
     };
 
   } catch (error) {

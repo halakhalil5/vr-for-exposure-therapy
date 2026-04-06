@@ -177,6 +177,10 @@ const SceneBuilder = () => {
         environment: sessionConfig.environment,
         sceneDescription: sessionConfig.sceneDescription
       });
+
+      if (response?.data?.unityRequest) {
+        console.log('Unity request payload (generate-scene):', response.data.unityRequest);
+      }
       
       setSceneJSON(response.data.sceneJSON);
       setPreviewURL(response.data.previewURL);
@@ -249,6 +253,9 @@ const SceneBuilder = () => {
         : { sceneJSON };
 
       const response = await sceneAPI.build(payload);
+      if (response?.data?.unityRequest) {
+        console.log('Unity request payload (build-scene):', response.data.unityRequest);
+      }
       if (response?.data?.previewURL) {
         setPreviewURL(response.data.previewURL);
       }

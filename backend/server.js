@@ -2,7 +2,7 @@
  * VR Therapy Dashboard - Main Server Entry Point
  * 
  * This Express server provides REST API endpoints for managing patients,
- * VR therapy sessions, scene generation via LLM, and Unity integration.
+ * VR therapy sessions and Unity integration.
  */
 
 const express = require('express');
@@ -125,10 +125,7 @@ app.listen(PORT, () => {
    - POST /api/patients        - Add new patient
    - GET  /api/patients        - List all patients
    - POST /api/sessions        - Create VR session
-   - POST /api/generate-scene  - Generate scene via LLM
-  - POST /api/ai-placement    - AI object placement from screenshots
    - POST /api/scene-preview   - Receive Unity preview
-  - POST /api/ai-placement/test-extraction - Validate placement parsing
    - GET  /api/reports/:id     - Get patient reports
   `);
 });

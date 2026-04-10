@@ -58,100 +58,38 @@ const toVector3 = (value, fallback = { x: 0, y: 0, z: 0 }) => {
   return { ...fallback };
 };
 
-// Normalize scene object format per spec
-const normalizeSceneObject = (obj = {}) => {
-  if (!obj.id) {
-    obj.id = `obj_${Math.random().toString(36).substr(2, 9)}`;
+const resolveEnvironmentName = (sceneJSON = {}) => {
+  const rawEnvironment = sceneJSON?.environment;
+
+  if (rawEnvironment && typeof rawEnvironment === 'object') {
+    return String(rawEnvironment.environment || rawEnvironment.id || rawEnvironment.name || 'unknown');
   }
 
-  return {
-    id: obj.id,
-    type: obj.type || 'unknown',
-    position: toVector3(obj.position),
-    ...(obj.rotation && { rotation: toVector3(obj.rotation) }),
-    ...(obj.scale && { scale: toVector3(obj.scale) })
-  };
+  return String(rawEnvironment || 'unknown');
 };
 
-const normalizePicturePrompts = (rawPrompts = []) => {
-  if (!Array.isArray(rawPrompts)) {
-    return [];
+const resolveDescription = (sceneJSON = {}, sceneDescription = '') => {
+  if (sceneDescription && String(sceneDescription).trim()) {
+    return String(sceneDescription).trim();
   }
 
-  return rawPrompts.slice(0, 7).map((entry, idx) => ({
-    picture: Number(entry?.picture) || idx + 1,
-    prompt: String(entry?.prompt || '')
-  }));
-};
-
-const toPictureRoomPromptFields = (picturePrompts = []) => {
-  const fields = {};
-
-  for (let i = 1; i <= 7; i += 1) {
-    const found = picturePrompts.find((entry) => Number(entry?.picture) === i);
-    fields[`picture${i}`] = String(found?.prompt || '');
+  if (sceneJSON?.sceneDescription && String(sceneJSON.sceneDescription).trim()) {
+    return String(sceneJSON.sceneDescription).trim();
   }
 
-  return fields;
-};
+  if (sceneJSON?.description && String(sceneJSON.description).trim()) {
+    return String(sceneJSON.description).trim();
+  }
 
-const extractPictureRoomData = (sceneJSON = {}) => {
-  const rawEnvironment = sceneJSON.environment;
-  const environmentName =
-    rawEnvironment && typeof rawEnvironment === 'object'
-      ? String(rawEnvironment.environment || 'unknown')
-      : String(rawEnvironment || 'unknown');
-
-  const promptsFromArray = normalizePicturePrompts(sceneJSON.picturePrompts);
-  const promptsFromNestedArray = normalizePicturePrompts(rawEnvironment?.picturePrompts);
-  const promptsFromFlatFields = Array.from({ length: 7 }, (_, idx) => {
-    const picture = idx + 1;
-    return {
-      picture,
-      prompt: String(sceneJSON[`picture${picture}`] || '')
-    };
-  });
-
-  const picturePrompts =
-    promptsFromArray.some((entry) => entry.prompt)
-      ? promptsFromArray
-      : promptsFromNestedArray.some((entry) => entry.prompt)
-        ? promptsFromNestedArray
-        : promptsFromFlatFields;
-
-  return {
-    environmentName,
-    picturePrompts
-  };
+  return '';
 };
 
 // Build scene request matching spec format
-const buildSceneRequest = (sceneJSON, intensity) => {
-  const { environmentName, picturePrompts } = extractPictureRoomData(sceneJSON);
-  const scenePayload = {
-    environment: environmentName,
-    objects: Array.isArray(sceneJSON.objects)
-      ? sceneJSON.objects.map(normalizeSceneObject)
-      : [],
-    triggers: Array.isArray(sceneJSON.triggers)
-      ? sceneJSON.triggers.map((t) => ({
-          type: t.type || 'unknown',
-          count: t.count || 1,
-          behavior: t.behavior || 'static',
-          position: t.position ? toVector3(t.position) : { x: 0, y: 0, z: 0 }
-        }))
-      : []
-  };
-
-  if (environmentName === 'picture-room') {
-    Object.assign(scenePayload, toPictureRoomPromptFields(picturePrompts));
-  }
-
+const buildSceneRequest = (sceneJSON, intensity, sceneDescription = '') => {
   return {
-    scene: scenePayload,
-    intensity: mapIntensity(intensity),
-    timestamp: new Date().toISOString(),
-    requestPreview: true
+    environment: resolveEnvironmentName(sceneJSON),
+    description: resolveDescription(sceneJSON, sceneDescription),
+    intensity: mapIntensity(intensity)
   };
 };
 
@@ -224,7 +162,7 @@ const checkUnityHealth = async () => {
  * @returns {Object} Unity response with status and previewURL
  * @throws {Error} If Unity is not ready or request fails
  */
-const sendSceneToUnity = async (sceneJSON, intensity = 5) => {
+const sendSceneToUnity = async (sceneJSON, intensity = 5, sceneDescription = '') => {
   // Step 1: Check Unity health per spec
   const health = await checkUnityHealth();
   if (!health.available) {
@@ -235,11 +173,11 @@ const sendSceneToUnity = async (sceneJSON, intensity = 5) => {
 
   try {
     // Step 2: Build request body per spec
-    const requestBody = buildSceneRequest(sceneJSON, intensity);
+    const requestBody = buildSceneRequest(sceneJSON, intensity, sceneDescription);
 
     console.log(`📤 Sending scene build request to Unity`);
-    console.log(`   Environment: ${requestBody.scene.environment}`);
-    console.log(`   Objects: ${requestBody.scene.objects.length}`);
+    console.log(`   Environment: ${requestBody.environment}`);
+    console.log(`   Description length: ${requestBody.description.length}`);
     console.log(`   Intensity: ${requestBody.intensity}`);
     console.log('🧾 Unity request payload:');
     console.log(JSON.stringify(requestBody, null, 2));

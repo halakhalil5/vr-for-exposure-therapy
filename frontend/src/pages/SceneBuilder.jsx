@@ -7,7 +7,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
-  FiSend, 
   FiRefreshCw,
   FiSave,
   FiPlay,
@@ -76,7 +75,6 @@ const SceneBuilder = () => {
   });
   const [sceneJSON, setSceneJSON] = useState(null);
   const [previewURL, setPreviewURL] = useState(null);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingToUnity, setIsSendingToUnity] = useState(false);
 
@@ -161,38 +159,6 @@ const SceneBuilder = () => {
     loadPatientHistory();
   }, [selectedPatient, sessionId]);
 
-  // Generate scene using LLM
-  const handleGenerateScene = async () => {
-    if (!selectedPatient) {
-      toast.error('Please select a patient first');
-      return;
-    }
-
-    try {
-      setIsGenerating(true);
-      const response = await sceneAPI.generate({
-        phobia: sessionConfig.phobia,
-        intensity: sessionConfig.intensity,
-        sceneTemplate: sessionConfig.sceneTemplate,
-        environment: sessionConfig.environment,
-        sceneDescription: sessionConfig.sceneDescription
-      });
-
-      if (response?.data?.unityRequest) {
-        console.log('Unity request payload (generate-scene):', response.data.unityRequest);
-      }
-      
-      setSceneJSON(response.data.sceneJSON);
-      setPreviewURL(response.data.previewURL);
-      toast.success('Scene generated successfully!');
-    } catch (error) {
-      console.error('Error generating scene:', error);
-      toast.error('Failed to generate scene');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
   // Save session
   const handleSaveSession = async (status = 'draft') => {
     if (!selectedPatient) {
@@ -201,7 +167,7 @@ const SceneBuilder = () => {
     }
 
     if (!sceneJSON) {
-      toast.error('Please generate a scene first');
+      toast.error('Please send the scene to Unity first');
       return;
     }
 
@@ -241,16 +207,22 @@ const SceneBuilder = () => {
 
   // Send existing scene JSON directly to Unity
   const handleSendToUnity = async () => {
-    if (!sceneJSON) {
-      toast.error('Generate a scene first');
+    if (!selectedPatient) {
+      toast.error('Please select a patient first');
       return;
     }
 
     try {
       setIsSendingToUnity(true);
-      const payload = sessionId
-        ? { sessionId }
-        : { sceneJSON };
+      const payload = {
+        environment: sessionConfig.environment,
+        description: sessionConfig.sceneDescription,
+        intensity: sessionConfig.intensity
+      };
+
+      if (sessionId) {
+        payload.sessionId = sessionId;
+      }
 
       const response = await sceneAPI.build(payload);
       if (response?.data?.unityRequest) {
@@ -258,6 +230,9 @@ const SceneBuilder = () => {
       }
       if (response?.data?.previewURL) {
         setPreviewURL(response.data.previewURL);
+      }
+      if (response?.data?.unityRequest) {
+        setSceneJSON(response.data.unityRequest);
       }
       toast.success('Scene sent to Unity');
     } catch (error) {
@@ -465,24 +440,6 @@ const SceneBuilder = () => {
             </div>
           </div>
 
-          {/* Generate Button */}
-          <button
-            onClick={handleGenerateScene}
-            disabled={isGenerating || !selectedPatient}
-            className="btn-primary w-full flex items-center justify-center space-x-2 py-3"
-          >
-            {isGenerating ? (
-              <>
-                <FiRefreshCw className="w-5 h-5 animate-spin" />
-                <span>Generating Scene...</span>
-              </>
-            ) : (
-              <>
-                <FiSend className="w-5 h-5" />
-                <span>Generate Scene with AI</span>
-              </>
-            )}
-          </button>
         </div>
 
         {/* Preview Panel */}
@@ -492,22 +449,13 @@ const SceneBuilder = () => {
               <FiEye className="w-5 h-5 text-primary-600" />
               <span>Scene Preview</span>
             </h2>
-            
-            {sceneJSON ? (
-              <ScenePreview 
-                previewURL={previewURL}
-                sceneJSON={sceneJSON}
-                isLoading={isSendingToUnity}
-                onEdit={() => {}}
-                onSendToUnity={handleSendToUnity}
-              />
-            ) : (
-              <div className="aspect-video bg-gray-100 rounded-lg flex items-center justify-center">
-                <p className="text-gray-400">
-                  Generate a scene to see preview
-                </p>
-              </div>
-            )}
+            <ScenePreview 
+              previewURL={previewURL}
+              sceneJSON={sceneJSON || { environment: sessionConfig.environment, description: sessionConfig.sceneDescription }}
+              isLoading={isSendingToUnity}
+              onEdit={() => {}}
+              onSendToUnity={handleSendToUnity}
+            />
           </div>
         </div>
       </div>

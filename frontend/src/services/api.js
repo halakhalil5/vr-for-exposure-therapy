@@ -240,24 +240,6 @@ export const sessionAPI = {
 
 export const sceneAPI = {
   /**
-   * Generate scene using LLM
-   */
-  generate: async (params) => {
-    const loadingToast = toast.loading('Generating scene with AI (this may take a minute)...');
-    try {
-      const response = await api.post('/generate-scene', params, {
-        timeout: 120000 // 2 minutes for LLM generation
-      });
-      toast.dismiss(loadingToast);
-      toast.success('Scene generated successfully');
-      return response.data;
-    } catch (error) {
-      toast.dismiss(loadingToast);
-      throw error;
-    }
-  },
-
-  /**
    * Build scene in Unity
    */
   build: async (data) => {

@@ -52,7 +52,7 @@ const ScenePreview = ({
             <FiImage className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500 font-medium">No Preview Available</p>
             <p className="text-sm text-gray-400 mt-1">
-              Configure the scene and click "Generate Scene" to create a preview
+              Configure the scene and click "Send to Unity" to create a preview
             </p>
           </div>
         </div>
@@ -150,7 +150,7 @@ const ScenePreview = ({
         )}
 
         {/* Send to Unity */}
-        {onSendToUnity && sceneJSON && (
+        {onSendToUnity && (
           <button
             onClick={onSendToUnity}
             className="btn-primary flex items-center space-x-2 text-sm"

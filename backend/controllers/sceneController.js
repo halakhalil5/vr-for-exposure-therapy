@@ -80,52 +80,10 @@ const SCENE_TEMPLATES = [
   }
 ];
 
-const extractPicturePrompts = (sceneDescription = '') => {
-  return Array.from({ length: 7 }, (_, idx) => {
-    const pictureNumber = idx + 1;
-    const matcher = new RegExp(`picture\\s*${pictureNumber}\\s*prompt\\s*:\\s*(.*)`, 'i');
-    const match = String(sceneDescription).match(matcher);
-
-    return {
-      picture: pictureNumber,
-      prompt: match?.[1]?.trim() || ''
-    };
-  });
-};
-
-const applyPictureRoomEnvironment = (sceneJSON = {}, sceneDescription = '') => {
-  const picturePrompts = extractPicturePrompts(sceneDescription);
-
+const buildPictureRoomSceneJSON = (sceneDescription = '') => {
   return {
-    ...sceneJSON,
     environment: 'picture-room',
-    picturePrompts
-  };
-};
-
-const ensurePictureRoomPrompts = (sceneJSON = {}, sceneDescription = '') => {
-  const environmentValue =
-    sceneJSON?.environment && typeof sceneJSON.environment === 'object'
-      ? sceneJSON.environment.environment
-      : sceneJSON?.environment;
-
-  if (String(environmentValue || '') !== 'picture-room') {
-    return sceneJSON;
-  }
-
-  const hasFlatPrompts = Array.from({ length: 7 }, (_, idx) => idx + 1)
-    .some((pictureNumber) => String(sceneJSON[`picture${pictureNumber}`] || '').trim().length > 0);
-
-  const hasPromptArray = Array.isArray(sceneJSON.picturePrompts)
-    && sceneJSON.picturePrompts.some((entry) => String(entry?.prompt || '').trim().length > 0);
-
-  if (hasFlatPrompts || hasPromptArray) {
-    return sceneJSON;
-  }
-
-  return {
-    ...sceneJSON,
-    picturePrompts: extractPicturePrompts(sceneDescription)
+    description: sceneDescription
   };
 };
 
@@ -205,13 +163,14 @@ const generateScene = asyncHandler(async (req, res) => {
 
   const selectedTemplate = SCENE_TEMPLATES.find((template) => template.id === sceneTemplate);
   const resolvedEnvironment = selectedTemplate?.environment || environment;
+  const isPictureRoom = resolvedEnvironment === 'picture-room' || sceneTemplate === 'picture-room';
 
   // Validate required fields
   if (!phobia || !intensity || !resolvedEnvironment) {
     throw new ApiError('Phobia, intensity, and scene template/environment are required', 400);
   }
 
-  console.log('🎨 Generating scene with LLM...');
+  console.log('🎨 Generating scene...');
   console.log('   Phobia:', phobia);
   console.log('   Intensity:', intensity);
   console.log('   Template:', sceneTemplate || 'n/a');
@@ -219,12 +178,14 @@ const generateScene = asyncHandler(async (req, res) => {
 
   try {
     let sceneJSON;
+    const therapistInstructions = [sceneDescription, customInstructions]
+      .filter(Boolean)
+      .join('\n\n');
 
-    if (ENABLE_LLM) {
-      const therapistInstructions = [sceneDescription, customInstructions]
-        .filter(Boolean)
-        .join('\n\n');
-
+    if (isPictureRoom) {
+      console.log('🖼️ Picture room selected. Skipping AI generation and using the therapist description directly.');
+      sceneJSON = buildPictureRoomSceneJSON(therapistInstructions);
+    } else if (ENABLE_LLM) {
       console.log('📤 Sending scene generation request to OpenAI...');
       sceneJSON = await llmService.generateSceneConfiguration({
         phobia,
@@ -244,10 +205,6 @@ const generateScene = asyncHandler(async (req, res) => {
         objectCounts,
         customInstructions
       });
-    }
-
-    if (sceneTemplate === 'picture-room' || resolvedEnvironment === 'picture-room') {
-      sceneJSON = applyPictureRoomEnvironment(sceneJSON, sceneDescription || customInstructions || '');
     }
 
     // If sessionId provided, update the session
@@ -270,7 +227,7 @@ const generateScene = asyncHandler(async (req, res) => {
     let unityRequest = null;
     try {
       console.log('📤 Sending scene to Unity...');
-      const unityResponse = await unityService.sendSceneToUnity(sceneJSON, Number(intensity));
+      const unityResponse = await unityService.sendSceneToUnity(sceneJSON, Number(intensity), therapistInstructions);
       unityRequest = unityResponse?.unityRequest || null;
       
       if (unityResponse && unityResponse.previewURL) {
@@ -374,11 +331,12 @@ const receiveScenePreview = asyncHandler(async (req, res) => {
  * POST /api/build-scene
  */
 const buildScene = asyncHandler(async (req, res) => {
-  const { sessionId, sceneJSON, intensity, sceneDescription } = req.body;
+  const { sessionId, sceneJSON, intensity, sceneDescription, environment, description } = req.body;
 
   let sceneConfig = sceneJSON;
   let sessionIntensity = intensity;
-  let sourceSceneDescription = sceneDescription || '';
+  let sourceEnvironment = environment;
+  let sourceDescription = description || sceneDescription || '';
 
   // If sessionId provided, get scene from session
   if (sessionId && !sceneJSON) {
@@ -388,18 +346,22 @@ const buildScene = asyncHandler(async (req, res) => {
     }
     sceneConfig = session.sceneJSON;
     sessionIntensity = intensity || session.intensity || 5;
-    sourceSceneDescription = sceneDescription || session.sceneDescription || '';
+    sourceEnvironment = environment || session.environment;
+    sourceDescription = description || sceneDescription || session.sceneDescription || '';
   }
 
-  if (!sceneConfig) {
-    throw new ApiError('Scene configuration is required', 400);
+  if (!sourceEnvironment) {
+    throw new ApiError('Environment is required', 400);
   }
+
+  const unitySceneConfig = {
+    environment: sourceEnvironment,
+    description: sourceDescription
+  };
 
   try {
-    sceneConfig = ensurePictureRoomPrompts(sceneConfig, sourceSceneDescription);
-
     console.log('🏗️ Sending scene to Unity for building...');
-    const result = await unityService.sendSceneToUnity(sceneConfig, Number(sessionIntensity));
+    const result = await unityService.sendSceneToUnity(unitySceneConfig, Number(sessionIntensity), sourceDescription);
 
     res.json({
       message: 'Scene sent to Unity successfully',

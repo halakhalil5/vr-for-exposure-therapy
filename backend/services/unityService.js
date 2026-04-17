@@ -15,17 +15,31 @@ const UNITY_SERVER_URL = process.env.UNITY_SERVER_URL || 'http://localhost:8080'
 const UNITY_TIMEOUT = 60000; // 60 seconds for scene building
 const HEALTH_CHECK_TIMEOUT = 5000; // 5 seconds for health check
 
-// Template to Environment Mapping per specification
-const ENVIRONMENT_MAP = {
-  'living-room': 'living_room',
-  'road-with-skyscrapers': 'city-street',
-  'rooftop': 'rooftop',
-  'cliff-edge': 'cliff-edge',
-  'building': 'building',
-  'elevator': 'elevator',
-  'airplane': 'airplane',
-  'airport': 'airport'
+const UNITY_ENVIRONMENT_ALIASES = {
+  // Requested base environments
+  airport: 'airport',
+  airplane: 'airplane',
+  building: 'building',
+  'glass-bridge': 'cliff',
+  cliff: 'cliff',
+  elevator: 'elevator',
+  house: 'house',
+  'picture-room': 'picture_room',
+  picture_room: 'picture_room',
+
+  // Legacy/backward-compatible aliases
+  'living-room': 'house',
+  'indoor-room': 'house',
+  rooftop: 'building',
+  bridge: 'cliff',
+  'cliff-edge': 'cliff',
+  cave: 'cliff',
+  'city-street': 'airport',
+  office: 'building'
 };
+
+// Backward-compatible alias retained for existing imports/exports.
+const ENVIRONMENT_MAP = UNITY_ENVIRONMENT_ALIASES;
 
 // Map intensity level (1-10) to float (0.0-1.0)
 const mapIntensity = (level) => {
@@ -68,6 +82,15 @@ const resolveEnvironmentName = (sceneJSON = {}) => {
   return String(rawEnvironment || 'unknown');
 };
 
+const normalizeEnvironmentForUnity = (environment) => {
+  if (environment == null) {
+    return 'unknown';
+  }
+
+  const key = String(environment).trim();
+  return UNITY_ENVIRONMENT_ALIASES[key] || key;
+};
+
 const resolveDescription = (sceneJSON = {}, sceneDescription = '') => {
   if (sceneDescription && String(sceneDescription).trim()) {
     return String(sceneDescription).trim();
@@ -86,8 +109,10 @@ const resolveDescription = (sceneJSON = {}, sceneDescription = '') => {
 
 // Build scene request matching spec format
 const buildSceneRequest = (sceneJSON, intensity, sceneDescription = '') => {
+  const rawEnvironment = resolveEnvironmentName(sceneJSON);
+
   return {
-    environment: resolveEnvironmentName(sceneJSON),
+    environment: normalizeEnvironmentForUnity(rawEnvironment),
     description: resolveDescription(sceneJSON, sceneDescription),
     intensity: mapIntensity(intensity)
   };

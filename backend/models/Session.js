@@ -100,14 +100,17 @@ const sessionSchema = new mongoose.Schema({
         'outdoor-park',      // Park or garden
         'office',            // Office building
         'building',          // Generic building interior
+        'house',             // House living room
         'elevator',          // Elevator/small space
         'rooftop',           // High building rooftop
         'bridge',            // Bridge or overpass
         'cliff-edge',        // Cliff edge environment
+        'cliff',             // Glass bridge / cliff environment
         'cave',              // Cave environment
         'airplane',          // Inside airplane
         'airport',           // Airport terminal
         'picture-room',      // Picture prompt environment
+        'picture_room',      // Picture prompt environment (Unity key)
         'forest',            // Forest environment
         'beach',             // Beach setting
         'city-street',       // Urban street
@@ -126,7 +129,9 @@ const sessionSchema = new mongoose.Schema({
       'road-with-skyscrappers',
       'rooftop',
       'cliff-edge',
+      'glass-bridge',
       'building',
+      'house',
       'cave',
       'elevator',
       'airplane',

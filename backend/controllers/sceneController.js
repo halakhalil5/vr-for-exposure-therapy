@@ -18,71 +18,59 @@ const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
 
 const SCENE_TEMPLATES = [
   {
-    id: 'living-room',
-    name: 'Living Room',
-    environment: 'living-room',
-    description: 'Comfortable indoor home setting'
-  },
-  {
-    id: 'road-with-skyscrappers',
-    name: 'Road with Skyscrappers',
-    environment: 'city-street',
-    description: 'Urban road surrounded by tall skyscrapers'
-  },
-  {
-    id: 'rooftop',
-    name: 'Rooftop',
-    environment: 'rooftop',
-    description: 'Open rooftop at significant height'
-  },
-  {
-    id: 'cliff-edge',
-    name: 'Cliff edge',
-    environment: 'cliff-edge',
-    description: 'Natural cliff edge with steep drop'
-  },
-  {
-    id: 'building',
-    name: 'Building',
-    environment: 'building',
-    description: 'Multi-floor building environment with interior corridors'
-  },
-  {
-    id: 'cave',
-    name: 'Cave',
-    environment: 'cave',
-    description: 'Enclosed cave pathway with rocky surroundings'
-  },
-  {
-    id: 'elevator',
-    name: 'Elevator',
-    environment: 'elevator',
-    description: 'Confined elevator cabin'
+    id: 'airport',
+    name: 'Airport',
+    environment: 'airport',
+    description: 'Airport terminal and boarding context',
+    recommendedForText: 'fear of flying'
   },
   {
     id: 'airplane',
     name: 'Airplane',
     environment: 'airplane',
-    description: 'Commercial airplane cabin'
+    description: 'Commercial airplane cabin',
+    recommendedForText: 'fear of flying'
   },
   {
-    id: 'airport',
-    name: 'Airport',
-    environment: 'airport',
-    description: 'Airport terminal and boarding context'
+    id: 'building',
+    name: 'Building (with rooftop)',
+    environment: 'building',
+    description: 'Multi-floor building with rooftop access',
+    recommendedForText: 'fear of heights'
+  },
+  {
+    id: 'glass-bridge',
+    name: 'Glass Bridge',
+    environment: 'cliff',
+    description: 'Elevated glass bridge with steep drop',
+    recommendedForText: 'fear of heights'
+  },
+  {
+    id: 'elevator',
+    name: 'Elevator',
+    environment: 'elevator',
+    description: 'Confined elevator cabin',
+    recommendedForText: 'claustrophobia'
+  },
+  {
+    id: 'house',
+    name: 'House (living room)',
+    environment: 'house',
+    description: 'Indoor home setting focused on the living room',
+    recommendedForText: 'arachnophobia'
   },
   {
     id: 'picture-room',
-    name: 'Picture Room',
-    environment: 'picture-room',
+    name: 'Picture Room (living room with pictures)',
+    environment: 'picture_room',
     description: 'Prompt-driven room where seven pictures are defined by therapist text',
-    recommendedFor: 'arachnophobia'
+    recommendedForText: 'arachnophobia'
   }
 ];
 
 const buildPictureRoomSceneJSON = (sceneDescription = '') => {
   return {
-    environment: 'picture-room',
+    environment: 'picture_room',
     description: sceneDescription
   };
 };
@@ -163,7 +151,7 @@ const generateScene = asyncHandler(async (req, res) => {
 
   const selectedTemplate = SCENE_TEMPLATES.find((template) => template.id === sceneTemplate);
   const resolvedEnvironment = selectedTemplate?.environment || environment;
-  const isPictureRoom = resolvedEnvironment === 'picture-room' || sceneTemplate === 'picture-room';
+  const isPictureRoom = resolvedEnvironment === 'picture_room' || sceneTemplate === 'picture-room';
 
   // Validate required fields
   if (!phobia || !intensity || !resolvedEnvironment) {

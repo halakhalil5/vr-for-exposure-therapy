@@ -32,3 +32,15 @@ Server default URL: `http://localhost:5000`
 cd backend
 npm test
 ```
+
+## Base Environment Mapping (Unity)
+
+Scene builder base environments now normalize to the following Unity keys when `/build-scene` is called:
+
+- Airport -> `airport` (recommended for fear of flying)
+- Airplane -> `airplane` (recommended for fear of flying)
+- Building (with rooftop) -> `building` (recommended for fear of heights)
+- Glass Bridge -> `cliff` (recommended for fear of heights)
+- Elevator -> `elevator` (recommended for claustrophobia)
+- House (living room) -> `house` (recommended for arachnophobia)
+- Picture Room (living room with pictures) -> `picture_room` (recommended for arachnophobia)

@@ -18,29 +18,30 @@ import ScenePreview from '../components/ScenePreview';
 import toast from 'react-hot-toast';
 
 const TEMPLATE_TO_ENVIRONMENT = {
-  'living-room': 'living-room',
-  'road-with-skyscrappers': 'city-street',
-  rooftop: 'rooftop',
-  'cliff-edge': 'cliff-edge',
-  building: 'building',
-  cave: 'cave',
-  elevator: 'elevator',
-  airplane: 'airplane',
   airport: 'airport',
-  'picture-room': 'picture-room'
+  airplane: 'airplane',
+  building: 'building',
+  'glass-bridge': 'cliff',
+  elevator: 'elevator',
+  house: 'house',
+  'picture-room': 'picture_room'
 };
 
 const ENVIRONMENT_TO_TEMPLATE = {
-  'living-room': 'living-room',
-  'indoor-room': 'living-room',
-  'city-street': 'road-with-skyscrappers',
-  rooftop: 'rooftop',
-  'cliff-edge': 'cliff-edge',
-  building: 'building',
-  cave: 'cave',
-  elevator: 'elevator',
-  airplane: 'airplane',
   airport: 'airport',
+  airplane: 'airplane',
+  building: 'building',
+  cliff: 'glass-bridge',
+  elevator: 'elevator',
+  house: 'house',
+  picture_room: 'picture-room',
+  // Backward compatibility for older sessions
+  'living-room': 'house',
+  'indoor-room': 'house',
+  'city-street': 'airport',
+  rooftop: 'building',
+  'cliff-edge': 'glass-bridge',
+  cave: 'glass-bridge',
   'picture-room': 'picture-room'
 };
 
@@ -69,8 +70,8 @@ const SceneBuilder = () => {
   const [sessionConfig, setSessionConfig] = useState({
     phobia: '',
     intensity: 5,
-    sceneTemplate: 'living-room',
-    environment: 'living-room',
+    sceneTemplate: 'airport',
+    environment: 'airport',
     sceneDescription: ''
   });
   const [sceneJSON, setSceneJSON] = useState(null);
@@ -116,7 +117,7 @@ const SceneBuilder = () => {
           setSessionConfig({
             phobia: session.phobia,
             intensity: session.intensity,
-            sceneTemplate: session.sceneTemplate || ENVIRONMENT_TO_TEMPLATE[session.environment] || 'living-room',
+            sceneTemplate: session.sceneTemplate || ENVIRONMENT_TO_TEMPLATE[session.environment] || 'airport',
             environment: session.environment,
             sceneDescription: session.sceneDescription || ''
           });
@@ -376,9 +377,9 @@ const SceneBuilder = () => {
                   >
                     <p className="font-medium text-sm text-gray-900">{template.name}</p>
                     <p className="text-xs text-gray-500 mt-1">{template.description}</p>
-                    {template.recommendedFor === 'arachnophobia' && (
+                    {template.recommendedForText && (
                       <p className="text-xs font-semibold text-emerald-700 mt-2">
-                        Recommended for arachnophobia
+                        Recommended for {template.recommendedForText}
                       </p>
                     )}
                   </button>

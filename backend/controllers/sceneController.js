@@ -63,7 +63,7 @@ const SCENE_TEMPLATES = [
     id: 'picture-room',
     name: 'Picture Room (living room with pictures)',
     environment: 'picture_room',
-    description: 'Prompt-driven room where seven pictures are defined by therapist text',
+    description: 'Prompt-driven room where eight pictures are defined by therapist text',
     recommendedForText: 'arachnophobia'
   }
 ];

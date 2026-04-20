@@ -10,16 +10,20 @@ const Patient = require('../models/Patient');
 const { asyncHandler, ApiError } = require('../middleware/errorHandler');
 
 const TEMPLATE_TO_ENVIRONMENT = {
-  'living-room': 'living-room',
-  'road-with-skyscrappers': 'city-street',
-  rooftop: 'rooftop',
-  'cliff-edge': 'cliff-edge',
-  building: 'building',
-  cave: 'cave',
-  elevator: 'elevator',
-  airplane: 'airplane',
   airport: 'airport',
-  'picture-room': 'picture-room'
+  airplane: 'airplane',
+  building: 'building',
+  'glass-bridge': 'cliff',
+  elevator: 'elevator',
+  house: 'house',
+  'picture-room': 'picture_room',
+
+  // Legacy templates for compatibility with existing sessions
+  'living-room': 'house',
+  'road-with-skyscrappers': 'airport',
+  rooftop: 'building',
+  'cliff-edge': 'cliff',
+  cave: 'cliff'
 };
 
 /**

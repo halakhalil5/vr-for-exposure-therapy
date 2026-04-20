@@ -52,7 +52,8 @@ const PICTURE_ROOM_PROMPT_TEMPLATE = [
   'picture 4 prompt:',
   'picture 5 prompt:',
   'picture 6 prompt:',
-  'picture 7 prompt:'
+  'picture 7 prompt:',
+  'picture 8 prompt:'
 ].join('\n');
 
 const SceneBuilder = () => {
@@ -435,7 +436,7 @@ const SceneBuilder = () => {
               />
               <p className="text-xs text-gray-500 mt-2">
                 {isPictureRoomTemplate
-                  ? 'Fill all seven picture prompts. These prompts are included in the environment payload sent to Unity.'
+                  ? 'Fill all eight picture prompts. These prompts are included in the environment payload sent to Unity.'
                   : 'This description guides AI scene generation while keeping the selected template.'}
               </p>
             </div>

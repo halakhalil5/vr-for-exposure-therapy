@@ -3,30 +3,47 @@
  * VR Therapy Dashboard
  */
 
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-0: #f4fbfc;
+  --bg-1: #eef7fb;
+  --bg-2: #fdfcf7;
+  --ink-0: #0f2c38;
+  --ink-1: #27424e;
+  --line-soft: #d8e8ef;
+}
+
 /* Base styles */
 @layer base {
   html {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Plus Jakarta Sans', 'Segoe UI', sans-serif;
+    background: radial-gradient(circle at 5% 10%, #daf5ff 0%, transparent 34%),
+      radial-gradient(circle at 95% 0%, #fff1cd 0%, transparent 30%),
+      linear-gradient(160deg, var(--bg-0) 0%, var(--bg-1) 58%, var(--bg-2) 100%);
   }
   
   body {
-    @apply bg-gray-50 text-gray-900 antialiased;
+    @apply text-slate-800 antialiased;
+    background: transparent;
   }
   
   h1 {
-    @apply text-3xl font-bold;
+    font-family: 'Sora', 'Plus Jakarta Sans', sans-serif;
+    @apply text-3xl font-bold tracking-tight;
   }
   
   h2 {
-    @apply text-2xl font-semibold;
+    font-family: 'Sora', 'Plus Jakarta Sans', sans-serif;
+    @apply text-2xl font-semibold tracking-tight;
   }
   
   h3 {
-    @apply text-xl font-semibold;
+    @apply text-xl font-semibold tracking-tight;
   }
   
   h4 {
@@ -38,19 +55,18 @@
 @layer components {
   /* Buttons */
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 
-           focus:outline-none focus:ring-2 focus:ring-offset-2 
-           disabled:opacity-50 disabled:cursor-not-allowed;
+      @apply inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-semibold transition-all duration-200
+        focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed;
   }
   
   .btn-primary {
-    @apply btn bg-primary-600 text-white hover:bg-primary-700 
-           focus:ring-primary-500;
+      @apply btn bg-gradient-to-r from-cyan-600 to-teal-600 text-white hover:from-cyan-500 hover:to-teal-500
+        focus:ring-cyan-500 shadow-md shadow-cyan-500/25;
   }
   
   .btn-secondary {
-    @apply btn bg-gray-200 text-gray-800 hover:bg-gray-300 
-           focus:ring-gray-400;
+      @apply btn bg-white text-slate-700 hover:bg-slate-50 border border-slate-200
+        focus:ring-slate-400 shadow-sm;
   }
   
   .btn-success {
@@ -64,24 +80,24 @@
   }
   
   .btn-outline {
-    @apply btn border-2 border-primary-600 text-primary-600 
-           hover:bg-primary-50 focus:ring-primary-500;
+    @apply btn border border-cyan-600 text-cyan-700
+           hover:bg-cyan-50 focus:ring-cyan-500;
   }
   
   /* Cards */
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-6;
+    @apply rounded-2xl border border-white/70 bg-white/90 p-6 shadow-sm backdrop-blur;
   }
   
   .card-hover {
-    @apply card hover:shadow-md transition-shadow duration-200;
+    @apply card transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-cyan-100;
   }
   
   /* Form elements */
   .form-input {
-    @apply w-full px-4 py-2 border border-gray-300 rounded-lg
-           focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent
-           placeholder-gray-400 transition-all duration-200;
+    @apply w-full rounded-xl border border-slate-200 bg-white/90 px-4 py-2.5 text-slate-800
+           focus:outline-none focus:ring-2 focus:ring-cyan-500 focus:border-transparent
+           placeholder-slate-400 transition-all duration-200 shadow-sm;
   }
   
   .form-select {
@@ -93,7 +109,7 @@
   }
   
   .form-label {
-    @apply block text-sm font-medium text-gray-700 mb-1;
+    @apply mb-1 block text-sm font-semibold text-slate-700;
   }
   
   .form-error {
@@ -102,7 +118,7 @@
   
   /* Badges */
   .badge {
-    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold;
   }
   
   .badge-primary {
@@ -140,12 +156,12 @@
   
   /* Navigation */
   .nav-link {
-    @apply flex items-center px-4 py-3 text-gray-600 hover:bg-gray-100 
-           hover:text-gray-900 rounded-lg transition-colors duration-200;
+    @apply flex items-center rounded-xl px-3 py-2.5 text-slate-600 transition-all duration-200
+           hover:bg-slate-100 hover:text-slate-900;
   }
   
   .nav-link-active {
-    @apply nav-link bg-primary-50 text-primary-700 font-medium;
+    @apply nav-link bg-gradient-to-r from-cyan-100 to-teal-100 text-cyan-800 shadow-sm;
   }
   
   /* Tables */
@@ -159,11 +175,11 @@
   
   /* Modals */
   .modal-overlay {
-    @apply fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50;
+    @apply fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm;
   }
   
   .modal-content {
-    @apply bg-white rounded-xl shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto;
+    @apply mx-4 max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-white/70 bg-white/95 shadow-xl;
   }
   
   /* Loading spinner */
@@ -177,8 +193,13 @@
   }
   
   .intensity-slider::-webkit-slider-thumb {
-    @apply appearance-none w-5 h-5 bg-primary-600 rounded-full cursor-pointer
-           hover:bg-primary-700 transition-colors;
+    @apply appearance-none w-5 h-5 bg-cyan-600 rounded-full cursor-pointer
+           hover:bg-cyan-700 transition-colors;
+  }
+
+  .app-shell {
+    background: radial-gradient(circle at 0% 100%, #e8fbff 0%, transparent 40%),
+      radial-gradient(circle at 100% 100%, #fff5de 0%, transparent 45%);
   }
 }
 
@@ -195,16 +216,16 @@
   }
   
   .scrollbar-thin::-webkit-scrollbar-track {
-    @apply bg-gray-100 rounded-full;
+    @apply bg-slate-100 rounded-full;
   }
   
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    @apply bg-gray-300 rounded-full hover:bg-gray-400;
+    @apply bg-slate-300 rounded-full hover:bg-slate-400;
   }
   
   /* Fade in animation */
   .animate-fade-in {
-    animation: fadeIn 0.3s ease-in-out;
+    animation: fadeIn 0.35s ease-in-out;
   }
   
   @keyframes fadeIn {
@@ -220,7 +241,7 @@
 
   /* Slide up animation */
   .animate-slide-up {
-    animation: slideUp 0.3s ease-out;
+    animation: slideUp 0.35s ease-out;
   }
 
   @keyframes slideUp {
@@ -234,15 +255,14 @@
     }
   }
   
-  /* Slide up animation */
-  .animate-slide-up {
-    animation: slideUp 0.3s ease-out;
+  .animate-enter {
+    animation: enter 0.45s ease both;
   }
-  
-  @keyframes slideUp {
+
+  @keyframes enter {
     from {
       opacity: 0;
-      transform: translateY(20px);
+      transform: translateY(14px) scale(0.995);
     }
     to {
       opacity: 1;

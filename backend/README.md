@@ -44,3 +44,7 @@ Scene builder base environments now normalize to the following Unity keys when `
 - Elevator -> `elevator` (recommended for claustrophobia)
 - House (living room) -> `house` (recommended for arachnophobia)
 - Picture Room (living room with pictures) -> `picture_room` (recommended for arachnophobia)
+
+Picture Room notes:
+
+- Therapist description is sent as prompt lines for 8 pictures.

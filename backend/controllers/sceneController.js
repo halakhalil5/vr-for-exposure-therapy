@@ -10,8 +10,10 @@ const { asyncHandler, ApiError } = require('../middleware/errorHandler');
 const llmService = require('../services/llmService');
 const aiPlacementService = require('../services/aiPlacementService');
 const unityService = require('../services/unityService');
+const speechService = require('../services/speechService');
 const path = require('path');
 const fs = require('fs');
+const fsPromises = require('fs/promises');
 const { v4: uuidv4 } = require('uuid');
 
 const ENABLE_LLM = process.env.ENABLE_LLM === 'true';
@@ -422,6 +424,33 @@ const validateScene = asyncHandler(async (req, res) => {
 });
 
 /**
+ * Convert uploaded speech audio to text using local Whisper.
+ * POST /api/speech-to-text
+ */
+const speechToText = asyncHandler(async (req, res) => {
+  if (!req.file) {
+    throw new ApiError('Audio file is required', 400);
+  }
+
+  if (!req.file.size) {
+    throw new ApiError('Uploaded audio file is empty', 400);
+  }
+
+  try {
+    const result = await speechService.transcribeAudioFile(req.file.path);
+
+    if (!result.text) {
+      throw new ApiError('No speech was detected in the audio', 400);
+    }
+
+    return res.json({ text: result.text });
+  } finally {
+    // Recordings are temporary; delete them after Whisper has finished.
+    await fsPromises.unlink(req.file.path).catch(() => {});
+  }
+});
+
+/**
  * Generate object placements from Unity screenshots and inventory context.
  * POST /api/ai-placement
  */
@@ -478,6 +507,7 @@ module.exports = {
   buildScene,
   getSceneTemplates,
   validateScene,
+  speechToText,
   generateAIPlacement,
   testAIPlacementExtraction
 };

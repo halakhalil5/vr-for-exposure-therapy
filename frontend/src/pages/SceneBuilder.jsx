@@ -4,13 +4,15 @@
  * Main page for creating and configuring VR therapy scenes.
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
-  FiRefreshCw,
   FiSave,
   FiPlay,
-  FiEye
+  FiEye,
+  FiMic,
+  FiSquare,
+  FiX
 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { patientAPI, sessionAPI, sceneAPI } from '../services/api';
@@ -56,6 +58,66 @@ const PICTURE_ROOM_PROMPT_TEMPLATE = [
   'picture 8 prompt:'
 ].join('\n');
 
+const SCENE_DESCRIPTION_SUGGESTIONS = {
+  airport: [
+    'Quiet airport check-in area with clear signage, a few distant passengers, visible exits, and soft announcement sounds.',
+    'Boarding gate waiting area with moderate foot traffic, nearby seats, luggage sounds, and a calm path toward the jet bridge.',
+    'Security queue scene with organized barriers, friendly staff, predictable movement, and enough open space for grounding breaks.'
+  ],
+  airplane: [
+    'Airplane cabin before takeoff with seated passengers, overhead bin activity, gentle cabin noise, and a visible aisle.',
+    'Window seat flight scene with soft engine sound, seatbelt signs, neutral lighting, and a calm flight attendant nearby.',
+    'Boarding moment inside the aircraft with people moving slowly through the aisle and clear reassurance cues from staff.'
+  ],
+  building: [
+    'High building lobby leading to upper floors, with elevator doors visible, distant windows, and a gradual height exposure path.',
+    'Rooftop terrace with secure railings, city view at a moderate distance, stable flooring, and clear retreat points.',
+    'Upper-floor hallway with large windows, soft indoor lighting, and optional steps closer to the view.'
+  ],
+  'glass-bridge': [
+    'Glass bridge entrance with sturdy side rails, a visible stable platform behind the patient, and a mild view through the floor.',
+    'Mid-bridge scene with transparent panels, mountain or city depth below, calm wind audio, and wide secure railings.',
+    'Short elevated walkway with gradual transparency, clear end point ahead, and reduced motion to support controlled exposure.'
+  ],
+  elevator: [
+    'Small elevator cabin with soft lighting, visible floor buttons, gentle mechanical sound, and doors that remain responsive.',
+    'Elevator ride between floors with minimal crowding, smooth movement, and a clear stop indicator above the doors.',
+    'Compact elevator with one calm passenger, neutral wall textures, active ventilation sound, and visible emergency controls.'
+  ],
+  house: [
+    'Living room with comfortable furniture, warm lighting, open doorway, and the exposure trigger placed at a manageable distance.',
+    'Home hallway leading into a room, with familiar household objects, quiet ambience, and clear exit visibility.',
+    'Calm bedroom or sitting area with neutral colors, minimal clutter, and gradual trigger placement for controlled practice.'
+  ],
+  'picture-room': [
+    [
+      'picture 1 prompt: calm neutral landscape',
+      'picture 2 prompt: mildly related trigger image at a distance',
+      'picture 3 prompt: trigger image with low detail',
+      'picture 4 prompt: trigger image with moderate detail',
+      'picture 5 prompt: trigger image closer but still contained',
+      'picture 6 prompt: realistic trigger image with clear context',
+      'picture 7 prompt: higher intensity trigger image',
+      'picture 8 prompt: strongest trigger image for this session goal'
+    ].join('\n'),
+    [
+      'picture 1 prompt: safe room or grounding image',
+      'picture 2 prompt: simple symbolic image related to the phobia',
+      'picture 3 prompt: low intensity real-world example',
+      'picture 4 prompt: moderate intensity real-world example',
+      'picture 5 prompt: detailed example with safe distance',
+      'picture 6 prompt: close realistic example',
+      'picture 7 prompt: challenging scene with clear context',
+      'picture 8 prompt: peak exposure image approved for this patient'
+    ].join('\n')
+  ],
+  default: [
+    'Controlled exposure scene with clear exits, neutral lighting, calm ambience, and the trigger introduced at a tolerable distance.',
+    'Gradual practice environment with predictable movement, a safe starting area, and adjustable trigger proximity.',
+    'Therapy-focused scene with grounding cues, low clutter, stable lighting, and exposure elements matched to the chosen intensity.'
+  ]
+};
+
 const SceneBuilder = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -79,6 +141,12 @@ const SceneBuilder = () => {
   const [previewURL, setPreviewURL] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingToUnity, setIsSendingToUnity] = useState(false);
+  const [showDescriptionSuggestions, setShowDescriptionSuggestions] = useState(false);
+  const [isRecordingDescription, setIsRecordingDescription] = useState(false);
+  const [isTranscribingDescription, setIsTranscribingDescription] = useState(false);
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const mediaStreamRef = useRef(null);
 
   // Load patients and templates
   useEffect(() => {
@@ -131,6 +199,15 @@ const SceneBuilder = () => {
       loadSession();
     }
   }, [sessionId]);
+
+  useEffect(() => {
+    return () => {
+      if (mediaRecorderRef.current?.state === 'recording') {
+        mediaRecorderRef.current.stop();
+      }
+      mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    };
+  }, []);
 
   // Load patient session history so the latest intensity can be reused.
   useEffect(() => {
@@ -205,6 +282,120 @@ const SceneBuilder = () => {
   // Handle form changes
   const handleConfigChange = (field, value) => {
     setSessionConfig(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSceneTemplateChange = (template) => {
+    handleConfigChange('sceneTemplate', template.id);
+    handleConfigChange('environment', TEMPLATE_TO_ENVIRONMENT[template.id] || template.environment);
+    setShowDescriptionSuggestions(false);
+
+    if (template.id === 'picture-room') {
+      handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
+    }
+  };
+
+  const currentDescriptionSuggestions =
+    SCENE_DESCRIPTION_SUGGESTIONS[sessionConfig.sceneTemplate] ||
+    SCENE_DESCRIPTION_SUGGESTIONS[sessionConfig.environment] ||
+    SCENE_DESCRIPTION_SUGGESTIONS.default;
+
+  const stopSceneDescriptionRecording = () => {
+    const recorder = mediaRecorderRef.current;
+    if (recorder?.state === 'recording') {
+      recorder.stop();
+    }
+  };
+
+  const startSceneDescriptionRecording = async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      toast.error('Microphone recording is not supported in this browser');
+      return;
+    }
+
+    if (typeof MediaRecorder === 'undefined') {
+      toast.error('Audio recording is not supported in this browser');
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : '';
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+
+      audioChunksRef.current = [];
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = (event) => {
+        if (event.data?.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      recorder.onerror = () => {
+        toast.error('Microphone recording failed');
+        setIsRecordingDescription(false);
+      };
+
+      recorder.onstop = async () => {
+        setIsRecordingDescription(false);
+        stream.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || 'audio/webm'
+        });
+        audioChunksRef.current = [];
+
+        if (!audioBlob.size) {
+          toast.error('No audio was recorded');
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append('audio', audioBlob, 'scene-description.webm');
+
+        try {
+          setIsTranscribingDescription(true);
+          const response = await sceneAPI.speechToText(formData);
+          const text = response?.text || response?.data?.text || '';
+
+          if (!text.trim()) {
+            toast.error('No speech was detected in the recording');
+            return;
+          }
+
+          handleConfigChange('sceneDescription', text.trim());
+          toast.success('Audio transcribed');
+        } catch (error) {
+          console.error('Speech-to-text failed:', error);
+          toast.error(error?.response?.data?.message || 'Failed to transcribe audio');
+        } finally {
+          setIsTranscribingDescription(false);
+        }
+      };
+
+      recorder.start();
+      setIsRecordingDescription(true);
+      toast.success('Recording started');
+    } catch (error) {
+      console.error('Microphone permission error:', error);
+      toast.error('Microphone permission was denied or unavailable');
+    }
+  };
+
+  const handleSceneDescriptionRecordingToggle = () => {
+    if (isTranscribingDescription) {
+      return;
+    }
+
+    if (isRecordingDescription) {
+      stopSceneDescriptionRecording();
+    } else {
+      startSceneDescriptionRecording();
+    }
   };
 
   // Send existing scene JSON directly to Unity
@@ -362,14 +553,7 @@ const SceneBuilder = () => {
                   <button
                     key={template.id}
                     type="button"
-                    onClick={() => {
-                      handleConfigChange('sceneTemplate', template.id);
-                      handleConfigChange('environment', TEMPLATE_TO_ENVIRONMENT[template.id] || template.environment);
-
-                      if (template.id === 'picture-room') {
-                        handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
-                      }
-                    }}
+                    onClick={() => handleSceneTemplateChange(template)}
                     className={`p-3 rounded-lg border-2 text-left transition-all ${
                       sessionConfig.sceneTemplate === template.id
                         ? 'border-primary-500 bg-primary-50'
@@ -425,7 +609,64 @@ const SceneBuilder = () => {
 
             {/* Scene Description */}
             <div className="rounded-xl border border-gray-200 bg-white p-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Scene Description</label>
+              <div className="relative mb-2 flex items-center justify-between gap-3">
+                <label className="block text-sm font-medium text-gray-700">Scene Description</label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowDescriptionSuggestions(prev => !prev)}
+                    className="text-xs font-semibold text-primary-700 hover:text-primary-800"
+                  >
+                    Suggestions
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSceneDescriptionRecordingToggle}
+                    disabled={isTranscribingDescription}
+                    aria-label={isRecordingDescription ? 'Stop recording scene description' : 'Record scene description with microphone'}
+                    title={isRecordingDescription ? 'Stop recording' : 'Record with microphone'}
+                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                      isRecordingDescription
+                        ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                  >
+                    {isRecordingDescription ? <FiSquare className="h-3.5 w-3.5" /> : <FiMic className="h-3.5 w-3.5" />}
+                    <span>{isRecordingDescription ? 'Stop' : 'Mic'}</span>
+                  </button>
+                </div>
+
+                {showDescriptionSuggestions && (
+                  <div className="absolute right-0 top-8 z-20 w-full max-w-md rounded-lg border border-gray-200 bg-white p-3 shadow-lg">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-gray-900">Choose a scene description</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowDescriptionSuggestions(false)}
+                        className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                        aria-label="Close suggestions"
+                      >
+                        <FiX className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <div className="max-h-64 space-y-2 overflow-y-auto">
+                      {currentDescriptionSuggestions.map((suggestion, index) => (
+                        <button
+                          key={`${sessionConfig.sceneTemplate}-suggestion-${index}`}
+                          type="button"
+                          onClick={() => {
+                            handleConfigChange('sceneDescription', suggestion);
+                            setShowDescriptionSuggestions(false);
+                          }}
+                          className="w-full rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-left text-xs leading-5 text-gray-700 transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-800"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
               <textarea
                 value={sessionConfig.sceneDescription}
                 onChange={(e) => handleConfigChange('sceneDescription', e.target.value)}
@@ -434,6 +675,14 @@ const SceneBuilder = () => {
                   : 'Describe the scene in detail for this patient and session intensity...\n\nExamples:\n• Start near the entrance with clear exits visible\n• Keep initial trigger distance moderate, then gradually reduce\n• Maintain calm ambient sounds and neutral lighting'}
                 className="form-textarea w-full h-32 text-sm"
               />
+              <div className="mt-2 min-h-5 text-xs font-medium">
+                {isRecordingDescription && (
+                  <span className="text-red-600">Recording...</span>
+                )}
+                {isTranscribingDescription && (
+                  <span className="text-primary-700">Processing audio...</span>
+                )}
+              </div>
               <p className="text-xs text-gray-500 mt-2">
                 {isPictureRoomTemplate
                   ? 'Fill all eight picture prompts. These prompts are included in the environment payload sent to Unity.'

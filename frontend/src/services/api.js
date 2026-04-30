@@ -270,6 +270,19 @@ export const sceneAPI = {
   validate: async (sceneJSON) => {
     const response = await api.post('/validate-scene', { sceneJSON });
     return response.data;
+  },
+
+  /**
+   * Transcribe locally recorded audio into scene description text.
+   */
+  speechToText: async (formData) => {
+    const response = await api.post('/speech-to-text', formData, {
+      timeout: 120000,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+    return response.data;
   }
 };
 

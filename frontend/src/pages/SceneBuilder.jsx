@@ -47,16 +47,39 @@ const ENVIRONMENT_TO_TEMPLATE = {
   'picture-room': 'picture-room'
 };
 
-const PICTURE_ROOM_PROMPT_TEMPLATE = [
-  'picture 1 prompt:',
-  'picture 2 prompt:',
-  'picture 3 prompt:',
-  'picture 4 prompt:',
-  'picture 5 prompt:',
-  'picture 6 prompt:',
-  'picture 7 prompt:',
-  'picture 8 prompt:'
-].join('\n');
+const PICTURE_ROOM_PROMPT_COUNT = 8;
+
+const buildPictureRoomDescription = (prompts = []) => (
+  Array.from({ length: PICTURE_ROOM_PROMPT_COUNT }, (_, index) => (
+    `picture ${index + 1} prompt: ${prompts[index] || ''}`.trimEnd()
+  )).join('\n')
+);
+
+const getPictureRoomPrompts = (description = '') => {
+  const prompts = Array(PICTURE_ROOM_PROMPT_COUNT).fill('');
+  const lines = String(description || '').split(/\r?\n/);
+
+  lines.forEach((line, fallbackIndex) => {
+    const match = line.match(/^picture\s*(\d+)\s*prompt:\s*(.*)$/i);
+
+    if (match) {
+      const promptIndex = Number(match[1]) - 1;
+      if (promptIndex >= 0 && promptIndex < PICTURE_ROOM_PROMPT_COUNT) {
+        prompts[promptIndex] = match[2];
+      }
+      return;
+    }
+
+    // Backward-friendly fallback for old free-form picture room descriptions.
+    if (fallbackIndex < PICTURE_ROOM_PROMPT_COUNT && line.trim()) {
+      prompts[fallbackIndex] = line.trim();
+    }
+  });
+
+  return prompts;
+};
+
+const PICTURE_ROOM_PROMPT_TEMPLATE = buildPictureRoomDescription();
 
 const SCENE_DESCRIPTION_SUGGESTIONS = {
   airport: [
@@ -85,32 +108,31 @@ const SCENE_DESCRIPTION_SUGGESTIONS = {
     'Compact elevator with one calm passenger, neutral wall textures, active ventilation sound, and visible emergency controls.'
   ],
   house: [
-    'Living room with comfortable furniture, warm lighting, open doorway, and the exposure trigger placed at a manageable distance.',
-    'Home hallway leading into a room, with familiar household objects, quiet ambience, and clear exit visibility.',
-    'Calm bedroom or sitting area with neutral colors, minimal clutter, and gradual trigger placement for controlled practice.'
-  ],
+    'Add one spider on the living room carpet',
+    'Add one spider on the living room table.',
+    ],
   'picture-room': [
-    [
-      'picture 1 prompt: calm neutral landscape',
-      'picture 2 prompt: mildly related trigger image at a distance',
-      'picture 3 prompt: trigger image with low detail',
-      'picture 4 prompt: trigger image with moderate detail',
-      'picture 5 prompt: trigger image closer but still contained',
-      'picture 6 prompt: realistic trigger image with clear context',
-      'picture 7 prompt: higher intensity trigger image',
-      'picture 8 prompt: strongest trigger image for this session goal'
-    ].join('\n'),
-    [
-      'picture 1 prompt: safe room or grounding image',
-      'picture 2 prompt: simple symbolic image related to the phobia',
-      'picture 3 prompt: low intensity real-world example',
-      'picture 4 prompt: moderate intensity real-world example',
-      'picture 5 prompt: detailed example with safe distance',
-      'picture 6 prompt: close realistic example',
-      'picture 7 prompt: challenging scene with clear context',
-      'picture 8 prompt: peak exposure image approved for this patient'
-    ].join('\n')
-  ],
+  [
+    'picture 1 prompt: a calm neutral landscape with soft sunlight, green meadow, blue sky, peaceful atmosphere, no animals present',
+    'picture 2 prompt: a very tiny spider far away on a wall in a bright room, barely visible, minimal detail, non-threatening',
+    'picture 3 prompt: a small spider with low detail sitting on a simple web in the corner of a room, soft lighting, slightly blurred',
+    'picture 4 prompt: a small spider on a web with moderate detail, neutral background, soft natural lighting, calm and non-threatening',
+    'picture 5 prompt: a clearer spider on a web outdoors, closer but still small in the frame, natural lighting, balanced composition',
+    'picture 6 prompt: a realistic spider on a leaf in daylight, visible details but in a calm natural setting, nature photography style',
+    'picture 7 prompt: a close-up realistic spider with visible legs and body texture, centered, sharp focus, slightly intense but still natural',
+    'picture 8 prompt: a highly detailed macro close-up of a spider showing eyes and fine textures clearly, filling most of the frame, maximum intensity'
+  ].join('\n'),
+  [
+    'picture 1 prompt: a cozy safe room with warm lighting, soft blankets, calm and relaxing environment, no spider present',
+    'picture 2 prompt: a simple cartoon drawing of a spider with rounded shapes and soft lines, friendly and non-threatening',
+    'picture 3 prompt: a small real spider at a distance on a wall, low detail, bright and calm indoor setting',
+    'picture 4 prompt: a moderately detailed spider on a web in a corner, clear but not close, soft natural lighting',
+    'picture 5 prompt: a detailed spider outdoors on a web with safe distance, natural environment, balanced focus and lighting',
+    'picture 6 prompt: a close realistic spider on a leaf, high detail, well-lit nature scene, neutral tone',
+    'picture 7 prompt: a close-up spider in a realistic indoor setting, clearly visible features, more intense but still contextualized',
+    'picture 8 prompt: an extreme close-up macro image of a spider with sharp focus on eyes and legs, full frame, peak exposure intensity'
+  ].join('\n')
+],
   default: [
     'Controlled exposure scene with clear exits, neutral lighting, calm ambience, and the trigger introduced at a tolerable distance.',
     'Gradual practice environment with predictable movement, a safe starting area, and adjustable trigger proximity.',
@@ -285,12 +307,18 @@ const SceneBuilder = () => {
   };
 
   const handleSceneTemplateChange = (template) => {
+    if (template.id === sessionConfig.sceneTemplate) {
+      return;
+    }
+
     handleConfigChange('sceneTemplate', template.id);
     handleConfigChange('environment', TEMPLATE_TO_ENVIRONMENT[template.id] || template.environment);
     setShowDescriptionSuggestions(false);
 
     if (template.id === 'picture-room') {
       handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
+    } else {
+      handleConfigChange('sceneDescription', '');
     }
   };
 
@@ -298,6 +326,12 @@ const SceneBuilder = () => {
     SCENE_DESCRIPTION_SUGGESTIONS[sessionConfig.sceneTemplate] ||
     SCENE_DESCRIPTION_SUGGESTIONS[sessionConfig.environment] ||
     SCENE_DESCRIPTION_SUGGESTIONS.default;
+
+  const handlePictureRoomPromptChange = (index, value) => {
+    const nextPrompts = getPictureRoomPrompts(sessionConfig.sceneDescription);
+    nextPrompts[index] = value;
+    handleConfigChange('sceneDescription', buildPictureRoomDescription(nextPrompts));
+  };
 
   const stopSceneDescriptionRecording = () => {
     const recorder = mediaRecorderRef.current;
@@ -438,6 +472,9 @@ const SceneBuilder = () => {
 
   const selectedPatientData = patients.find(patient => patient._id === selectedPatient);
   const isPictureRoomTemplate = sessionConfig.sceneTemplate === 'picture-room';
+  const pictureRoomPrompts = isPictureRoomTemplate
+    ? getPictureRoomPrompts(sessionConfig.sceneDescription)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -667,6 +704,23 @@ const SceneBuilder = () => {
                   </div>
                 )}
               </div>
+              {isPictureRoomTemplate ? (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  {pictureRoomPrompts.map((prompt, index) => (
+                    <div key={`picture-prompt-${index + 1}`}>
+                      <label className="mb-1 block text-xs font-semibold text-gray-600">
+                        Picture {index + 1} prompt
+                      </label>
+                      <textarea
+                        value={prompt}
+                        onChange={(e) => handlePictureRoomPromptChange(index, e.target.value)}
+                        placeholder={`Describe image ${index + 1}...`}
+                        className="form-textarea h-20 w-full resize-none text-sm"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
               <textarea
                 value={sessionConfig.sceneDescription}
                 onChange={(e) => handleConfigChange('sceneDescription', e.target.value)}
@@ -675,6 +729,7 @@ const SceneBuilder = () => {
                   : 'Describe the scene in detail for this patient and session intensity...\n\nExamples:\n• Start near the entrance with clear exits visible\n• Keep initial trigger distance moderate, then gradually reduce\n• Maintain calm ambient sounds and neutral lighting'}
                 className="form-textarea w-full h-32 text-sm"
               />
+              )}
               <div className="mt-2 min-h-5 text-xs font-medium">
                 {isRecordingDescription && (
                   <span className="text-red-600">Recording...</span>

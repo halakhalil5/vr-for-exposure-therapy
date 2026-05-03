@@ -166,9 +166,12 @@ const SceneBuilder = () => {
   const [showDescriptionSuggestions, setShowDescriptionSuggestions] = useState(false);
   const [isRecordingDescription, setIsRecordingDescription] = useState(false);
   const [isTranscribingDescription, setIsTranscribingDescription] = useState(false);
+  const [recordingPromptIndex, setRecordingPromptIndex] = useState(null);
+  const [transcribingPromptIndex, setTranscribingPromptIndex] = useState(null);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const mediaStreamRef = useRef(null);
+  const recordingTargetRef = useRef({ type: 'description', index: null });
 
   // Load patients and templates
   useEffect(() => {
@@ -340,7 +343,7 @@ const SceneBuilder = () => {
     }
   };
 
-  const startSceneDescriptionRecording = async () => {
+  const startSceneDescriptionRecording = async (promptIndex = null) => {
     if (!navigator.mediaDevices?.getUserMedia) {
       toast.error('Microphone recording is not supported in this browser');
       return;
@@ -352,6 +355,9 @@ const SceneBuilder = () => {
     }
 
     try {
+      const recordingTarget = Number.isInteger(promptIndex)
+        ? { type: 'picturePrompt', index: promptIndex }
+        : { type: 'description', index: null };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
         ? 'audio/webm;codecs=opus'
@@ -361,6 +367,7 @@ const SceneBuilder = () => {
       audioChunksRef.current = [];
       mediaStreamRef.current = stream;
       mediaRecorderRef.current = recorder;
+      recordingTargetRef.current = recordingTarget;
 
       recorder.ondataavailable = (event) => {
         if (event.data?.size > 0) {
@@ -371,10 +378,13 @@ const SceneBuilder = () => {
       recorder.onerror = () => {
         toast.error('Microphone recording failed');
         setIsRecordingDescription(false);
+        setRecordingPromptIndex(null);
       };
 
       recorder.onstop = async () => {
+        const stoppedTarget = recordingTargetRef.current;
         setIsRecordingDescription(false);
+        setRecordingPromptIndex(null);
         stream.getTracks().forEach((track) => track.stop());
         mediaStreamRef.current = null;
 
@@ -393,6 +403,7 @@ const SceneBuilder = () => {
 
         try {
           setIsTranscribingDescription(true);
+          setTranscribingPromptIndex(stoppedTarget.type === 'picturePrompt' ? stoppedTarget.index : null);
           const response = await sceneAPI.speechToText(formData);
           const text = response?.text || response?.data?.text || '';
 
@@ -401,18 +412,24 @@ const SceneBuilder = () => {
             return;
           }
 
-          handleConfigChange('sceneDescription', text.trim());
+          if (stoppedTarget.type === 'picturePrompt') {
+            handlePictureRoomPromptChange(stoppedTarget.index, text.trim());
+          } else {
+            handleConfigChange('sceneDescription', text.trim());
+          }
           toast.success('Audio transcribed');
         } catch (error) {
           console.error('Speech-to-text failed:', error);
           toast.error(error?.response?.data?.message || 'Failed to transcribe audio');
         } finally {
           setIsTranscribingDescription(false);
+          setTranscribingPromptIndex(null);
         }
       };
 
       recorder.start();
       setIsRecordingDescription(true);
+      setRecordingPromptIndex(recordingTarget.type === 'picturePrompt' ? recordingTarget.index : null);
       toast.success('Recording started');
     } catch (error) {
       console.error('Microphone permission error:', error);
@@ -420,15 +437,21 @@ const SceneBuilder = () => {
     }
   };
 
-  const handleSceneDescriptionRecordingToggle = () => {
+  const handleSceneDescriptionRecordingToggle = (promptIndex = null) => {
     if (isTranscribingDescription) {
       return;
     }
 
     if (isRecordingDescription) {
-      stopSceneDescriptionRecording();
+      const currentTarget = recordingTargetRef.current;
+      const isSamePicturePrompt = currentTarget.type === 'picturePrompt' && currentTarget.index === promptIndex;
+      const isSameDescription = currentTarget.type === 'description' && promptIndex == null;
+
+      if (isSamePicturePrompt || isSameDescription) {
+        stopSceneDescriptionRecording();
+      }
     } else {
-      startSceneDescriptionRecording();
+      startSceneDescriptionRecording(promptIndex);
     }
   };
 
@@ -656,21 +679,23 @@ const SceneBuilder = () => {
                   >
                     Suggestions
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleSceneDescriptionRecordingToggle}
-                    disabled={isTranscribingDescription}
-                    aria-label={isRecordingDescription ? 'Stop recording scene description' : 'Record scene description with microphone'}
-                    title={isRecordingDescription ? 'Stop recording' : 'Record with microphone'}
-                    className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
-                      isRecordingDescription
-                        ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                        : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
-                    } disabled:cursor-not-allowed disabled:opacity-60`}
-                  >
-                    {isRecordingDescription ? <FiSquare className="h-3.5 w-3.5" /> : <FiMic className="h-3.5 w-3.5" />}
-                    <span>{isRecordingDescription ? 'Stop' : 'Mic'}</span>
-                  </button>
+                  {!isPictureRoomTemplate && (
+                    <button
+                      type="button"
+                      onClick={() => handleSceneDescriptionRecordingToggle()}
+                      disabled={isTranscribingDescription}
+                      aria-label={isRecordingDescription ? 'Stop recording scene description' : 'Record scene description with microphone'}
+                      title={isRecordingDescription ? 'Stop recording' : 'Record with microphone'}
+                      className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition ${
+                        isRecordingDescription
+                          ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                          : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {isRecordingDescription ? <FiSquare className="h-3.5 w-3.5" /> : <FiMic className="h-3.5 w-3.5" />}
+                      <span>{isRecordingDescription ? 'Stop' : 'Mic'}</span>
+                    </button>
+                  )}
                 </div>
 
                 {showDescriptionSuggestions && (
@@ -708,15 +733,50 @@ const SceneBuilder = () => {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {pictureRoomPrompts.map((prompt, index) => (
                     <div key={`picture-prompt-${index + 1}`}>
-                      <label className="mb-1 block text-xs font-semibold text-gray-600">
-                        Picture {index + 1} prompt
-                      </label>
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <label className="block text-xs font-semibold text-gray-600">
+                          Picture {index + 1} prompt
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleSceneDescriptionRecordingToggle(index)}
+                          disabled={
+                            isTranscribingDescription ||
+                            (isRecordingDescription && recordingPromptIndex !== index)
+                          }
+                          aria-label={
+                            recordingPromptIndex === index
+                              ? `Stop recording picture ${index + 1} prompt`
+                              : `Record picture ${index + 1} prompt with microphone`
+                          }
+                          title={recordingPromptIndex === index ? 'Stop recording' : 'Record with microphone'}
+                          className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border text-xs font-medium transition ${
+                            recordingPromptIndex === index
+                              ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                              : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
+                          } disabled:cursor-not-allowed disabled:opacity-50`}
+                        >
+                          {recordingPromptIndex === index ? (
+                            <FiSquare className="h-3.5 w-3.5" />
+                          ) : (
+                            <FiMic className="h-3.5 w-3.5" />
+                          )}
+                        </button>
+                      </div>
                       <textarea
                         value={prompt}
                         onChange={(e) => handlePictureRoomPromptChange(index, e.target.value)}
                         placeholder={`Describe image ${index + 1}...`}
                         className="form-textarea h-20 w-full resize-none text-sm"
                       />
+                      <div className="mt-1 min-h-4 text-xs font-medium">
+                        {recordingPromptIndex === index && (
+                          <span className="text-red-600">Recording...</span>
+                        )}
+                        {transcribingPromptIndex === index && (
+                          <span className="text-primary-700">Processing audio...</span>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -731,10 +791,10 @@ const SceneBuilder = () => {
               />
               )}
               <div className="mt-2 min-h-5 text-xs font-medium">
-                {isRecordingDescription && (
+                {!isPictureRoomTemplate && isRecordingDescription && (
                   <span className="text-red-600">Recording...</span>
                 )}
-                {isTranscribingDescription && (
+                {!isPictureRoomTemplate && isTranscribingDescription && (
                   <span className="text-primary-700">Processing audio...</span>
                 )}
               </div>

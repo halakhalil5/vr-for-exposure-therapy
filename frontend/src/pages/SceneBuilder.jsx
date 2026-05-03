@@ -26,7 +26,8 @@ const TEMPLATE_TO_ENVIRONMENT = {
   'glass-bridge': 'cliff',
   elevator: 'elevator',
   house: 'house',
-  'picture-room': 'picture_room'
+  'picture-room': 'picture_room',
+  bedroom: 'bedroom'
 };
 
 const ENVIRONMENT_TO_TEMPLATE = {
@@ -44,7 +45,8 @@ const ENVIRONMENT_TO_TEMPLATE = {
   rooftop: 'building',
   'cliff-edge': 'glass-bridge',
   cave: 'glass-bridge',
-  'picture-room': 'picture-room'
+  'picture-room': 'picture-room',
+  bedroom: 'bedroom'
 };
 
 const PICTURE_ROOM_PROMPT_COUNT = 8;
@@ -110,6 +112,10 @@ const SCENE_DESCRIPTION_SUGGESTIONS = {
   house: [
     'Add one spider on the living room carpet',
     'Add one spider on the living room table.',
+    ],
+  bedroom: [
+    'Add one spider on the bedroom floor.',
+    'Add one spider on the bed.',
     ],
   'picture-room': [
   [

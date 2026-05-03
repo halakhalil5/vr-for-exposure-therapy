@@ -116,6 +116,7 @@ const sessionSchema = new mongoose.Schema({
         'city-street',       // Urban street
         'medical-office',    // Doctor's office
         'presentation-room', // Conference/presentation room
+        'bedroom',           // Bedroom environment
         'custom'             // Custom environment
       ]
     }
@@ -136,7 +137,8 @@ const sessionSchema = new mongoose.Schema({
       'elevator',
       'airplane',
       'airport',
-      'picture-room'
+      'picture-room',
+      'bedroom'
     ]
   },
 

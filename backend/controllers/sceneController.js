@@ -67,6 +67,13 @@ const SCENE_TEMPLATES = [
     environment: 'picture_room',
     description: 'Prompt-driven room where eight pictures are defined by therapist text',
     recommendedForText: 'arachnophobia'
+  },
+  {
+    id: 'bedroom',
+    name: 'Bedroom',
+    environment: 'bedroom',
+    description: 'Indoor home setting focused on the bedroom',
+    recommendedForText: 'arachnophobia'
   }
 ];
 

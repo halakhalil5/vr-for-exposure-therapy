@@ -114,7 +114,11 @@ const buildSceneRequest = (sceneJSON, intensity, sceneDescription = '') => {
   return {
     environment: normalizeEnvironmentForUnity(rawEnvironment),
     description: resolveDescription(sceneJSON, sceneDescription),
-    intensity: mapIntensity(intensity)
+    intensity: mapIntensity(intensity),
+    // Include patient information if provided
+    ...(sceneJSON.patientId && { patientId: sceneJSON.patientId }),
+    ...(sceneJSON.patientName && { patientName: sceneJSON.patientName }),
+    ...(sceneJSON.phobia && { phobia: sceneJSON.phobia })
   };
 };
 

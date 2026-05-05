@@ -9,14 +9,12 @@ import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { 
   FiSave,
   FiPlay,
-  FiEye,
   FiMic,
   FiSquare,
   FiX
 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { patientAPI, sessionAPI, sceneAPI } from '../services/api';
-import ScenePreview from '../components/ScenePreview';
 import toast from 'react-hot-toast';
 
 const TEMPLATE_TO_ENVIRONMENT = {
@@ -470,10 +468,16 @@ const SceneBuilder = () => {
 
     try {
       setIsSendingToUnity(true);
+      const patient = patients.find(p => p._id === selectedPatient);
+      
       const payload = {
         environment: sessionConfig.environment,
         description: sessionConfig.sceneDescription,
-        intensity: sessionConfig.intensity
+        intensity: sessionConfig.intensity,
+        // Include patient information
+        patientId: selectedPatient,
+        patientName: patient?.name,
+        phobia: sessionConfig.phobia || patient?.phobia
       };
 
       if (sessionId) {
@@ -537,7 +541,7 @@ const SceneBuilder = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Configuration Panel */}
+        {/* Left Panel: Patient Selection & Scene Template */}
         <div className="space-y-6">
           {/* Patient Selection */}
           <div className="card">
@@ -564,7 +568,7 @@ const SceneBuilder = () => {
             </select>
           </div>
 
-          {selectedPatientData && (
+          {/* {selectedPatientData && (
             <div className="card bg-primary-50 border border-primary-100">
               <p className="text-sm text-primary-700">
                 <span className="font-semibold">Registered phobia:</span> {selectedPatientData.phobia}
@@ -573,7 +577,7 @@ const SceneBuilder = () => {
                 Phobia is preset from patient registration and cannot be changed here.
               </p>
             </div>
-          )}
+          )} */}
 
           {patientSessionHistory.length > 0 && (
             <div className="card border border-gray-200 bg-gray-50">
@@ -581,7 +585,7 @@ const SceneBuilder = () => {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">Previous session intensity log</h2>
                   <p className="text-sm text-gray-500">
-                    Latest session used {patientSessionHistory[0].intensity}/10
+                    Latest session used {patientSessionHistory[0].intensity}/5
                   </p>
                 </div>
                 <span className="text-xs text-gray-500">
@@ -593,7 +597,7 @@ const SceneBuilder = () => {
                 {patientSessionHistory.slice(0, 3).map((session) => (
                   <div key={session._id} className="flex items-center justify-between rounded-md bg-white px-3 py-2 text-sm border border-gray-100">
                     <div>
-                      <p className="font-medium text-gray-900">Intensity {session.intensity}/10</p>
+                      <p className="font-medium text-gray-900">Intensity {session.intensity}/5</p>
                       <p className="text-xs text-gray-500 capitalize">
                         {session.environment} • {format(new Date(session.date), 'MMM d, yyyy')}
                       </p>
@@ -605,76 +609,76 @@ const SceneBuilder = () => {
             </div>
           )}
 
-          {/* Session Configuration */}
+          {/* Scene Template Selection */}
           <div className="card">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">
-              Session Configuration
+              Scene Template
             </h2>
-            
-            {/* Scene Template Selection */}
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-2">Scene Template</label>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {sceneTemplates.map((template) => (
-                  <button
-                    key={template.id}
-                    type="button"
-                    onClick={() => handleSceneTemplateChange(template)}
-                    className={`p-3 rounded-lg border-2 text-left transition-all ${
-                      sessionConfig.sceneTemplate === template.id
-                        ? 'border-primary-500 bg-primary-50'
-                        : 'border-gray-200 hover:border-gray-300'
-                    }`}
-                  >
-                    <p className="font-medium text-sm text-gray-900">{template.name}</p>
-                    <p className="text-xs text-gray-500 mt-1">{template.description}</p>
-                    {template.recommendedForText && (
-                      <p className="text-xs font-semibold text-emerald-700 mt-2">
-                        Recommended for {template.recommendedForText}
-                      </p>
-                    )}
-                  </button>
-                ))}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {sceneTemplates.map((template) => (
+                <button
+                  key={template.id}
+                  type="button"
+                  onClick={() => handleSceneTemplateChange(template)}
+                  className={`p-3 rounded-lg border-2 text-left transition-all ${
+                    sessionConfig.sceneTemplate === template.id
+                      ? 'border-primary-500 bg-primary-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <p className="font-medium text-sm text-gray-900">{template.name}</p>
+                  <p className="text-xs text-gray-500 mt-1">{template.description}</p>
+                  {template.recommendedForText && (
+                    <p className="text-xs font-semibold text-emerald-700 mt-2">
+                      Recommended for {template.recommendedForText}
+                    </p>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Panel: Intensity, Description & Send to Unity Button */}
+        <div className="space-y-6">
+          {/* Intensity Slider */}
+          {!isPictureRoomTemplate && (
+          <div className="card rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-4 mb-2">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Intensity Level</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Start from the last recorded setting and adjust if needed.
+                </p>
               </div>
+              <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
+                sessionConfig.intensity <= 2 ? 'bg-green-100 text-green-700' :
+                sessionConfig.intensity === 3 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {sessionConfig.intensity}/5 ({sessionConfig.intensity <= 2 ? 'Low' : sessionConfig.intensity === 3 ? 'Medium' : 'High'})
+              </span>
             </div>
 
-            {/* Intensity Slider */}
-            {!isPictureRoomTemplate && (
-            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-4 mb-2">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Intensity Level</p>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Start from the last recorded setting and adjust if needed.
-                  </p>
-                </div>
-                <span className={`text-sm font-semibold px-2.5 py-1 rounded-full ${
-                  sessionConfig.intensity <= 3 ? 'bg-green-100 text-green-700' :
-                  sessionConfig.intensity <= 6 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700'
-                }`}>
-                  {sessionConfig.intensity}/10 ({sessionConfig.intensity <= 3 ? 'Low' : sessionConfig.intensity <= 6 ? 'Medium' : 'High'})
-                </span>
-              </div>
+            <input
+              type="range"
+              min="1"
+              max="5"
+              value={sessionConfig.intensity}
+              onChange={(e) => handleConfigChange('intensity', parseInt(e.target.value))}
+              className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gray-200"
+            />
 
-              <input
-                type="range"
-                min="1"
-                max="10"
-                value={sessionConfig.intensity}
-                onChange={(e) => handleConfigChange('intensity', parseInt(e.target.value))}
-                className="w-full h-2 rounded-lg appearance-none cursor-pointer bg-gray-200"
-              />
-
-              <div className="mt-2 flex justify-between text-xs font-medium text-gray-400">
-                <span>Minimal</span>
-                <span>Moderate</span>
-                <span>Maximum</span>
-              </div>
+            <div className="mt-2 flex justify-between text-xs font-medium text-gray-400">
+              <span>1 - Minimal</span>
+              <span>3 - Moderate</span>
+              <span>5 - Maximum</span>
             </div>
-            )}
+          </div>
+          )}
 
-            {/* Scene Description */}
-            <div className="rounded-xl border border-gray-200 bg-white p-4">
+          {/* Scene Description */}
+          <div className="card rounded-xl border border-gray-200 bg-white">
+            <div className="p-4 pb-2">
               <div className="relative mb-2 flex items-center justify-between gap-3">
                 <label className="block text-sm font-medium text-gray-700">Scene Description</label>
                 <div className="flex items-center gap-2">
@@ -812,23 +816,15 @@ const SceneBuilder = () => {
             </div>
           </div>
 
-        </div>
-
-        {/* Preview Panel */}
-        <div className="space-y-6">
-          <div className="card">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center space-x-2">
-              <FiEye className="w-5 h-5 text-primary-600" />
-              <span>Scene Preview</span>
-            </h2>
-            <ScenePreview 
-              previewURL={previewURL}
-              sceneJSON={sceneJSON || { environment: sessionConfig.environment, description: sessionConfig.sceneDescription }}
-              isLoading={isSendingToUnity}
-              onEdit={() => {}}
-              onSendToUnity={handleSendToUnity}
-            />
-          </div>
+          {/* Send to Unity Button */}
+          <button
+            onClick={handleSendToUnity}
+            disabled={!selectedPatient || isSendingToUnity}
+            className="btn-primary w-full py-3 flex items-center justify-center space-x-2 text-lg font-semibold"
+          >
+            <FiPlay className="w-5 h-5" />
+            <span>{isSendingToUnity ? 'Sending to Unity...' : 'Send to Unity'}</span>
+          </button>
         </div>
       </div>
     </div>

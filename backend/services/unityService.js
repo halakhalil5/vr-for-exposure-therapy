@@ -110,11 +110,14 @@ const resolveDescription = (sceneJSON = {}, sceneDescription = '') => {
 // Build scene request matching spec format
 const buildSceneRequest = (sceneJSON, intensity, sceneDescription = '') => {
   const rawEnvironment = resolveEnvironmentName(sceneJSON);
+  
+  // Convert intensity 1-5 to float 0.0-1.0
+  const intensityFloat = (Number(intensity) - 1) / 4;
 
   return {
     environment: normalizeEnvironmentForUnity(rawEnvironment),
     description: resolveDescription(sceneJSON, sceneDescription),
-    intensity: Number(intensity),
+    intensity: intensityFloat,
     // Include patient information if provided
     ...(sceneJSON.patientId && { patientId: sceneJSON.patientId }),
     ...(sceneJSON.patientName && { patientName: sceneJSON.patientName }),

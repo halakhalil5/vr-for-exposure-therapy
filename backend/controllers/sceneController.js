@@ -341,7 +341,14 @@ const buildScene = asyncHandler(async (req, res) => {
   } = req.body;
 
   let sceneConfig = sceneJSON;
-  let sessionIntensity = intensity;
+ let sessionIntensity = Number(intensity);
+
+// Ensure it's a valid number and force float format
+if (!Number.isFinite(sessionIntensity)) {
+  sessionIntensity = 1.0; // default fallback
+} else {
+  sessionIntensity = parseFloat(sessionIntensity.toFixed(1));
+}
   let sourceEnvironment = environment;
   let sourceDescription = description || sceneDescription || '';
 
@@ -352,8 +359,15 @@ const buildScene = asyncHandler(async (req, res) => {
       throw new ApiError('Session not found', 404);
     }
     sceneConfig = session.sceneJSON;
-    sessionIntensity = intensity || session.intensity || 5;
-    sourceEnvironment = environment || session.environment;
+    const rawIntensity = intensity ?? session.intensity;
+sessionIntensity = Number(rawIntensity);
+
+if (!Number.isFinite(sessionIntensity)) {
+  sessionIntensity = 1.0;
+} else {
+  sessionIntensity = parseFloat(sessionIntensity.toFixed(1));
+}
+sourceEnvironment = environment || session.environment;
     sourceDescription = description || sceneDescription || session.sceneDescription || '';
   }
 
@@ -367,12 +381,13 @@ const buildScene = asyncHandler(async (req, res) => {
     // Include patient information in payload
     patientId,
     patientName,
-    phobia
+    phobia,
+    intensity: sessionIntensity
   };
 
   try {
     console.log('🏗️ Sending scene to Unity for building...');
-    const result = await unityService.sendSceneToUnity(unitySceneConfig, Number(sessionIntensity), sourceDescription);
+    const result = await unityService.sendSceneToUnity(unitySceneConfig, (sessionIntensity), sourceDescription);
 
     res.json({
       message: 'Scene sent to Unity successfully',

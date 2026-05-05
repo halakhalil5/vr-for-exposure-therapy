@@ -158,7 +158,7 @@ const SceneBuilder = () => {
   const [patientSessionHistory, setPatientSessionHistory] = useState([]);
   const [sessionConfig, setSessionConfig] = useState({
     phobia: '',
-    intensity: 5,
+    intensity: 3,
     sceneTemplate: 'airport',
     environment: 'airport',
     sceneDescription: ''
@@ -255,7 +255,7 @@ const SceneBuilder = () => {
           const previousIntensity = history[0]?.intensity;
           setSessionConfig(prev => ({
             ...prev,
-            intensity: previousIntensity ?? 5
+            intensity: previousIntensity ?? 3
           }));
         }
       } catch (error) {

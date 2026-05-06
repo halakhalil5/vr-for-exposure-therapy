@@ -472,7 +472,7 @@ const SceneBuilder = () => {
       
       const payload = {
         environment: sessionConfig.environment,
-        description: sessionConfig.sceneDescription,
+        freeText: sessionConfig.sceneDescription,
         intensity: sessionConfig.intensity,
         // Include patient information
         patientId: selectedPatient,

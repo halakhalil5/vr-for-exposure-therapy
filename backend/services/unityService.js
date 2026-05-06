@@ -41,14 +41,27 @@ const UNITY_ENVIRONMENT_ALIASES = {
 // Backward-compatible alias retained for existing imports/exports.
 const ENVIRONMENT_MAP = UNITY_ENVIRONMENT_ALIASES;
 
-// Map intensity level (1-10) to float (0.0-1.0)
-const mapIntensity = (level) => {
+// Normalize intensity to Unity's 0.0-1.0 range.
+// This keeps 0 at 0.0 and maps the active scale linearly.
+const mapIntensity = (level, maxLevel = 10) => {
   const intensityNum = Number(level);
-  if (isNaN(intensityNum) || intensityNum < 1 || intensityNum > 10) {
-    console.warn(`Invalid intensity ${level}, defaulting to 0.5`);
-    return 0.5;
+  if (!Number.isFinite(intensityNum)) {
+    console.warn(`Invalid intensity ${level}, defaulting to 0.0`);
+    return 0.0;
   }
-  return (intensityNum - 1) / 9;
+
+  const normalizedMaxLevel = Number(maxLevel);
+  if (!Number.isFinite(normalizedMaxLevel) || normalizedMaxLevel <= 1) {
+    return 0.0;
+  }
+
+  const clampedIntensity = Math.max(0, Math.min(normalizedMaxLevel, intensityNum));
+
+  if (clampedIntensity === 0) {
+    return 0.0;
+  }
+
+  return (clampedIntensity - 1) / (normalizedMaxLevel - 1);
 };
 
 // Helper: Convert value to Vector3 format
@@ -91,9 +104,13 @@ const normalizeEnvironmentForUnity = (environment) => {
   return UNITY_ENVIRONMENT_ALIASES[key] || key;
 };
 
-const resolveDescription = (sceneJSON = {}, sceneDescription = '') => {
-  if (sceneDescription && String(sceneDescription).trim()) {
-    return String(sceneDescription).trim();
+const resolveDescription = (sceneJSON = {}, freeText = '') => {
+  if (freeText && String(freeText).trim()) {
+    return String(freeText).trim();
+  }
+
+  if (sceneJSON?.freeText && String(sceneJSON.freeText).trim()) {
+    return String(sceneJSON.freeText).trim();
   }
 
   if (sceneJSON?.sceneDescription && String(sceneJSON.sceneDescription).trim()) {
@@ -108,15 +125,15 @@ const resolveDescription = (sceneJSON = {}, sceneDescription = '') => {
 };
 
 // Build scene request matching spec format
-const buildSceneRequest = (sceneJSON, intensity, sceneDescription = '') => {
+const buildSceneRequest = (sceneJSON, intensity, freeText = '', maxIntensity = 10) => {
   const rawEnvironment = resolveEnvironmentName(sceneJSON);
   
-  // Convert intensity 1-5 to float 0.0-1.0
-  const intensityFloat = (Number(intensity) - 1) / 4;
+  // Normalize the configured intensity before sending it to Unity.
+  const intensityFloat = mapIntensity(intensity, maxIntensity);
 
   return {
     environment: normalizeEnvironmentForUnity(rawEnvironment),
-    description: resolveDescription(sceneJSON, sceneDescription),
+    freeText: resolveDescription(sceneJSON, freeText),
     intensity: intensityFloat,
     // Include patient information if provided
     ...(sceneJSON.patientId && { patientId: sceneJSON.patientId }),
@@ -194,7 +211,7 @@ const checkUnityHealth = async () => {
  * @returns {Object} Unity response with status and previewURL
  * @throws {Error} If Unity is not ready or request fails
  */
-const sendSceneToUnity = async (sceneJSON, intensity = 5, sceneDescription = '') => {
+const sendSceneToUnity = async (sceneJSON, intensity = 5, freeText = '', maxIntensity = 10) => {
   // Step 1: Check Unity health per spec
   const health = await checkUnityHealth();
   if (!health.available) {
@@ -205,16 +222,26 @@ const sendSceneToUnity = async (sceneJSON, intensity = 5, sceneDescription = '')
 
   try {
     // Step 2: Build request body per spec
-    const requestBody = buildSceneRequest(sceneJSON, intensity, sceneDescription);
+    const requestBody = buildSceneRequest(sceneJSON, intensity, freeText, maxIntensity);
 
     console.log(`📤 Sending scene build request to Unity`);
-    console.log(`   Environment: ${requestBody.environment}`);
-    console.log(`   Description length: ${requestBody.description.length}`);
-    console.log(`   Intensity: ${requestBody.intensity}`);
+    console.log(`   Raw intensity input: ${intensity} (max: ${maxIntensity})`);
+    console.log(`   Normalized to float: ${requestBody.intensity} (type: ${typeof requestBody.intensity})`);
+    console.log(`   Exact value: ${JSON.stringify({intensity: requestBody.intensity})}`);
+    console.log(`   Free text length: ${requestBody.freeText.length}`);
     console.log('🧾 Unity request payload:');
     console.log(JSON.stringify(requestBody, null, 2));
 
     // Step 3: POST to /build-scene
+    console.log('\n' + '='.repeat(60));
+    console.log('🎯 EXACT PAYLOAD BEING SENT TO UNITY:');
+    console.log('='.repeat(60));
+    console.log('🔍 DEBUG - requestBody.intensity value:', requestBody.intensity);
+    console.log('🔍 DEBUG - requestBody.intensity type:', typeof requestBody.intensity);
+    console.log('📦 FULL REQUEST BODY:');
+    console.log(JSON.stringify(requestBody, null, 2));
+    console.log('='.repeat(60) + '\n');
+    
     const response = await axios.post(
       `${UNITY_SERVER_URL}/build-scene`,
       requestBody,

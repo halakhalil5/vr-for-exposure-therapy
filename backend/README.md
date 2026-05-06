@@ -48,3 +48,12 @@ Scene builder base environments now normalize to the following Unity keys when `
 Picture Room notes:
 
 - Therapist description is sent as prompt lines for 8 pictures.
+
+Intensity sent to Unity is normalized to a 0.0-1.0 float. `0` stays `0.0`.
+
+Scale mapping:
+
+- Scene Builder `1-5` maps to `1=0.0, 2=0.25, 3=0.5, 4=0.75, 5=1.0`
+- Session form `1-10` maps to `1=0.0, 10=1.0` with linear values in between
+
+Each path uses the same linear formula against its own max level before the `/build-scene` request is sent.

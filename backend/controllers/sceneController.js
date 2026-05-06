@@ -224,7 +224,7 @@ const generateScene = asyncHandler(async (req, res) => {
     let unityRequest = null;
     try {
       console.log('📤 Sending scene to Unity...');
-      const unityResponse = await unityService.sendSceneToUnity(sceneJSON, Number(intensity), therapistInstructions);
+      const unityResponse = await unityService.sendSceneToUnity(sceneJSON, Number(intensity), therapistInstructions, 10);
       unityRequest = unityResponse?.unityRequest || null;
       
       if (unityResponse && unityResponse.previewURL) {
@@ -334,6 +334,7 @@ const buildScene = asyncHandler(async (req, res) => {
     intensity, 
     sceneDescription, 
     environment, 
+    freeText,
     description,
     patientId,
     patientName,
@@ -350,7 +351,7 @@ if (!Number.isFinite(sessionIntensity)) {
   sessionIntensity = parseFloat(sessionIntensity.toFixed(1));
 }
   let sourceEnvironment = environment;
-  let sourceDescription = description || sceneDescription || '';
+  let sourceFreeText = freeText || description || sceneDescription || '';
 
   // If sessionId provided, get scene from session
   if (sessionId && !sceneJSON) {
@@ -368,7 +369,7 @@ if (!Number.isFinite(sessionIntensity)) {
   sessionIntensity = parseFloat(sessionIntensity.toFixed(1));
 }
 sourceEnvironment = environment || session.environment;
-    sourceDescription = description || sceneDescription || session.sceneDescription || '';
+    sourceFreeText = freeText || description || sceneDescription || session.sceneDescription || '';
   }
 
   if (!sourceEnvironment) {
@@ -377,7 +378,7 @@ sourceEnvironment = environment || session.environment;
 
   const unitySceneConfig = {
     environment: sourceEnvironment,
-    description: sourceDescription,
+    freeText: sourceFreeText,
     // Include patient information in payload
     patientId,
     patientName,
@@ -387,7 +388,12 @@ sourceEnvironment = environment || session.environment;
 
   try {
     console.log('🏗️ Sending scene to Unity for building...');
-    const result = await unityService.sendSceneToUnity(unitySceneConfig, (sessionIntensity), sourceDescription);
+    const result = await unityService.sendSceneToUnity(unitySceneConfig, sessionIntensity, sourceFreeText, 5);
+
+    console.log('✅ Result from unityService:', JSON.stringify({
+      intensity: result?.unityRequest?.intensity,
+      environment: result?.unityRequest?.environment
+    }, null, 2));
 
     res.json({
       message: 'Scene sent to Unity successfully',

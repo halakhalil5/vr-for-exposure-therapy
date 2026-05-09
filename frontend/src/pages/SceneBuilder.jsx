@@ -11,7 +11,9 @@ import {
   FiPlay,
   FiMic,
   FiSquare,
-  FiX
+  FiX,
+  FiPlus,
+  FiTrash2
 } from 'react-icons/fi';
 import { format } from 'date-fns';
 import { patientAPI, sessionAPI, sceneAPI } from '../services/api';
@@ -77,6 +79,14 @@ const getPictureRoomPrompts = (description = '') => {
   });
 
   return prompts;
+};
+
+const filterPictureRoomDescription = (description = '') => {
+  const prompts = getPictureRoomPrompts(description);
+  const filledPrompts = prompts.filter(p => p.trim());
+  return filledPrompts
+    .map((prompt, index) => `picture ${index + 1} prompt: ${prompt}`)
+    .join('\n');
 };
 
 const PICTURE_ROOM_PROMPT_TEMPLATE = buildPictureRoomDescription();
@@ -172,6 +182,7 @@ const SceneBuilder = () => {
   const [isTranscribingDescription, setIsTranscribingDescription] = useState(false);
   const [recordingPromptIndex, setRecordingPromptIndex] = useState(null);
   const [transcribingPromptIndex, setTranscribingPromptIndex] = useState(null);
+  const [visiblePromptsCount, setVisiblePromptsCount] = useState(1);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const mediaStreamRef = useRef(null);
@@ -212,15 +223,23 @@ const SceneBuilder = () => {
           const response = await sessionAPI.getById(sessionId);
           const session = response.data;
           setSelectedPatient(session.patientId?._id || '');
+          const template = session.sceneTemplate || ENVIRONMENT_TO_TEMPLATE[session.environment] || 'airport';
           setSessionConfig({
             phobia: session.phobia,
             intensity: session.intensity,
-            sceneTemplate: session.sceneTemplate || ENVIRONMENT_TO_TEMPLATE[session.environment] || 'airport',
+            sceneTemplate: template,
             environment: session.environment,
             sceneDescription: session.sceneDescription || ''
           });
           setSceneJSON(session.sceneJSON);
           setPreviewURL(session.previewURL);
+          
+          // Initialize visible prompts count for picture room
+          if (template === 'picture-room' && session.sceneDescription) {
+            const prompts = getPictureRoomPrompts(session.sceneDescription);
+            const filledCount = prompts.findIndex(p => !p.trim());
+            setVisiblePromptsCount(filledCount >= 0 ? filledCount + 1 : 8);
+          }
         } catch (error) {
           console.error('Error loading session:', error);
         }
@@ -285,6 +304,9 @@ const SceneBuilder = () => {
       const sessionData = {
         patientId: selectedPatient,
         ...sessionConfig,
+        sceneDescription: isPictureRoomTemplate 
+          ? filterPictureRoomDescription(sessionConfig.sceneDescription)
+          : sessionConfig.sceneDescription,
         sceneJSON,
         previewURL,
         status
@@ -324,6 +346,7 @@ const SceneBuilder = () => {
 
     if (template.id === 'picture-room') {
       handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
+      setVisiblePromptsCount(1);
     } else {
       handleConfigChange('sceneDescription', '');
     }
@@ -472,7 +495,9 @@ const SceneBuilder = () => {
       
       const payload = {
         environment: sessionConfig.environment,
-        freeText: sessionConfig.sceneDescription,
+        freeText: isPictureRoomTemplate 
+          ? filterPictureRoomDescription(sessionConfig.sceneDescription)
+          : sessionConfig.sceneDescription,
         intensity: sessionConfig.intensity,
         // Include patient information
         patientId: selectedPatient,
@@ -740,55 +765,84 @@ const SceneBuilder = () => {
                 )}
               </div>
               {isPictureRoomTemplate ? (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                  {pictureRoomPrompts.map((prompt, index) => (
-                    <div key={`picture-prompt-${index + 1}`}>
-                      <div className="mb-1 flex items-center justify-between gap-2">
-                        <label className="block text-xs font-semibold text-gray-600">
-                          Picture {index + 1} prompt
-                        </label>
-                        <button
-                          type="button"
-                          onClick={() => handleSceneDescriptionRecordingToggle(index)}
-                          disabled={
-                            isTranscribingDescription ||
-                            (isRecordingDescription && recordingPromptIndex !== index)
-                          }
-                          aria-label={
-                            recordingPromptIndex === index
-                              ? `Stop recording picture ${index + 1} prompt`
-                              : `Record picture ${index + 1} prompt with microphone`
-                          }
-                          title={recordingPromptIndex === index ? 'Stop recording' : 'Record with microphone'}
-                          className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border text-xs font-medium transition ${
-                            recordingPromptIndex === index
-                              ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
-                              : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
-                          } disabled:cursor-not-allowed disabled:opacity-50`}
-                        >
-                          {recordingPromptIndex === index ? (
-                            <FiSquare className="h-3.5 w-3.5" />
-                          ) : (
-                            <FiMic className="h-3.5 w-3.5" />
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {pictureRoomPrompts.slice(0, visiblePromptsCount).map((prompt, index) => (
+                      <div key={`picture-prompt-${index + 1}`}>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <label className="block text-xs font-semibold text-gray-600">
+                            Picture {index + 1} prompt
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleSceneDescriptionRecordingToggle(index)}
+                              disabled={
+                                isTranscribingDescription ||
+                                (isRecordingDescription && recordingPromptIndex !== index)
+                              }
+                              aria-label={
+                                recordingPromptIndex === index
+                                  ? `Stop recording picture ${index + 1} prompt`
+                                  : `Record picture ${index + 1} prompt with microphone`
+                              }
+                              title={recordingPromptIndex === index ? 'Stop recording' : 'Record with microphone'}
+                              className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border text-xs font-medium transition ${
+                                recordingPromptIndex === index
+                                  ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                                  : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
+                              } disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
+                              {recordingPromptIndex === index ? (
+                                <FiSquare className="h-3.5 w-3.5" />
+                              ) : (
+                                <FiMic className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            {visiblePromptsCount > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (visiblePromptsCount > 1) {
+                                    setVisiblePromptsCount(visiblePromptsCount - 1);
+                                  }
+                                }}
+                                aria-label={`Remove picture ${index + 1} prompt`}
+                                title="Remove picture"
+                                className="inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 text-xs font-medium transition"
+                              >
+                                <FiX className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <textarea
+                          value={prompt}
+                          onChange={(e) => handlePictureRoomPromptChange(index, e.target.value)}
+                          placeholder={`Describe image ${index + 1}...`}
+                          className="form-textarea h-20 w-full resize-none text-sm"
+                        />
+                        <div className="mt-1 min-h-4 text-xs font-medium">
+                          {recordingPromptIndex === index && (
+                            <span className="text-red-600">Recording...</span>
                           )}
-                        </button>
+                          {transcribingPromptIndex === index && (
+                            <span className="text-primary-700">Processing audio...</span>
+                          )}
+                        </div>
                       </div>
-                      <textarea
-                        value={prompt}
-                        onChange={(e) => handlePictureRoomPromptChange(index, e.target.value)}
-                        placeholder={`Describe image ${index + 1}...`}
-                        className="form-textarea h-20 w-full resize-none text-sm"
-                      />
-                      <div className="mt-1 min-h-4 text-xs font-medium">
-                        {recordingPromptIndex === index && (
-                          <span className="text-red-600">Recording...</span>
-                        )}
-                        {transcribingPromptIndex === index && (
-                          <span className="text-primary-700">Processing audio...</span>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
+                  {visiblePromptsCount < 8 && (
+                    <button
+                      type="button"
+                      onClick={() => setVisiblePromptsCount(visiblePromptsCount + 1)}
+                      className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-primary-300 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-100 transition"
+                    >
+                      <FiPlus className="h-4 w-4" />
+                      Add Picture
+                    </button>
+                  )}
                 </div>
               ) : (
               <textarea

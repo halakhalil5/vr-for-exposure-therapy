@@ -49,16 +49,14 @@ const ENVIRONMENT_TO_TEMPLATE = {
   bedroom: 'bedroom'
 };
 
-const PICTURE_ROOM_PROMPT_COUNT = 8;
-
 const buildPictureRoomDescription = (prompts = []) => (
-  Array.from({ length: PICTURE_ROOM_PROMPT_COUNT }, (_, index) => (
-    `picture ${index + 1} prompt: ${prompts[index] || ''}`.trimEnd()
-  )).join('\n')
+  prompts.length > 0
+    ? prompts.map((prompt, index) => `picture ${index + 1} prompt: ${prompt || ''}`.trimEnd()).join('\n')
+    : ''
 );
 
 const getPictureRoomPrompts = (description = '') => {
-  const prompts = Array(PICTURE_ROOM_PROMPT_COUNT).fill('');
+  const prompts = [];
   const lines = String(description || '').split(/\r?\n/);
 
   lines.forEach((line, fallbackIndex) => {
@@ -66,19 +64,19 @@ const getPictureRoomPrompts = (description = '') => {
 
     if (match) {
       const promptIndex = Number(match[1]) - 1;
-      if (promptIndex >= 0 && promptIndex < PICTURE_ROOM_PROMPT_COUNT) {
+      if (promptIndex >= 0) {
         prompts[promptIndex] = match[2];
       }
       return;
     }
 
     // Backward-friendly fallback for old free-form picture room descriptions.
-    if (fallbackIndex < PICTURE_ROOM_PROMPT_COUNT && line.trim()) {
+    if (line.trim()) {
       prompts[fallbackIndex] = line.trim();
     }
   });
 
-  return prompts;
+  return prompts.length > 0 ? prompts : [''];
 };
 
 const filterPictureRoomDescription = (description = '') => {
@@ -89,7 +87,7 @@ const filterPictureRoomDescription = (description = '') => {
     .join('\n');
 };
 
-const PICTURE_ROOM_PROMPT_TEMPLATE = buildPictureRoomDescription();
+const PICTURE_ROOM_PROMPT_TEMPLATE = buildPictureRoomDescription(['', '']);
 
 const SCENE_DESCRIPTION_SUGGESTIONS = {
   airport: [
@@ -127,24 +125,12 @@ const SCENE_DESCRIPTION_SUGGESTIONS = {
     ],
   'picture-room': [
   [
-    'picture 1 prompt: a calm neutral landscape with soft sunlight, green meadow, blue sky, peaceful atmosphere, no animals present',
-    'picture 2 prompt: a very tiny spider far away on a wall in a bright room, barely visible, minimal detail, non-threatening',
-    'picture 3 prompt: a small spider with low detail sitting on a simple web in the corner of a room, soft lighting, slightly blurred',
-    'picture 4 prompt: a small spider on a web with moderate detail, neutral background, soft natural lighting, calm and non-threatening',
-    'picture 5 prompt: a clearer spider on a web outdoors, closer but still small in the frame, natural lighting, balanced composition',
-    'picture 6 prompt: a realistic spider on a leaf in daylight, visible details but in a calm natural setting, nature photography style',
-    'picture 7 prompt: a close-up realistic spider with visible legs and body texture, centered, sharp focus, slightly intense but still natural',
-    'picture 8 prompt: a highly detailed macro close-up of a spider showing eyes and fine textures clearly, filling most of the frame, maximum intensity'
+    'picture 1 prompt:ultra realistic spider, macro photography, detailed hairs, realistic eyes, natural lighting, sharp focus, photorealistic, 8k, high detail, shallow depth of field',
+    'picture 2 prompt:ultra realistic spider, macro photography, detailed hairs, realistic eyes, natural lighting, sharp focus, photorealistic, 8k, high detail, shallow depth of field'
   ].join('\n'),
   [
-    'picture 1 prompt: a cozy safe room with warm lighting, soft blankets, calm and relaxing environment, no spider present',
-    'picture 2 prompt: a simple cartoon drawing of a spider with rounded shapes and soft lines, friendly and non-threatening',
-    'picture 3 prompt: a small real spider at a distance on a wall, low detail, bright and calm indoor setting',
-    'picture 4 prompt: a moderately detailed spider on a web in a corner, clear but not close, soft natural lighting',
-    'picture 5 prompt: a detailed spider outdoors on a web with safe distance, natural environment, balanced focus and lighting',
-    'picture 6 prompt: a close realistic spider on a leaf, high detail, well-lit nature scene, neutral tone',
-    'picture 7 prompt: a close-up spider in a realistic indoor setting, clearly visible features, more intense but still contextualized',
-    'picture 8 prompt: an extreme close-up macro image of a spider with sharp focus on eyes and legs, full frame, peak exposure intensity'
+    'picture 1 prompt: ultra realistic spider, macro photography, detailed hairs, realistic eyes, natural lighting, sharp focus, photorealistic, 8k, high detail, shallow depth of field',
+    'picture 2 prompt: photorealistic spider on a leaf, natural lighting, detailed textures, sharp focus, 8k resolution, high detail, shallow depth of field'
   ].join('\n')
 ],
   default: [
@@ -182,7 +168,6 @@ const SceneBuilder = () => {
   const [isTranscribingDescription, setIsTranscribingDescription] = useState(false);
   const [recordingPromptIndex, setRecordingPromptIndex] = useState(null);
   const [transcribingPromptIndex, setTranscribingPromptIndex] = useState(null);
-  const [visiblePromptsCount, setVisiblePromptsCount] = useState(1);
   const mediaRecorderRef = useRef(null);
   const audioChunksRef = useRef([]);
   const mediaStreamRef = useRef(null);
@@ -233,13 +218,6 @@ const SceneBuilder = () => {
           });
           setSceneJSON(session.sceneJSON);
           setPreviewURL(session.previewURL);
-          
-          // Initialize visible prompts count for picture room
-          if (template === 'picture-room' && session.sceneDescription) {
-            const prompts = getPictureRoomPrompts(session.sceneDescription);
-            const filledCount = prompts.findIndex(p => !p.trim());
-            setVisiblePromptsCount(filledCount >= 0 ? filledCount + 1 : 8);
-          }
         } catch (error) {
           console.error('Error loading session:', error);
         }
@@ -346,7 +324,6 @@ const SceneBuilder = () => {
 
     if (template.id === 'picture-room') {
       handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
-      setVisiblePromptsCount(1);
     } else {
       handleConfigChange('sceneDescription', '');
     }
@@ -361,6 +338,16 @@ const SceneBuilder = () => {
     const nextPrompts = getPictureRoomPrompts(sessionConfig.sceneDescription);
     nextPrompts[index] = value;
     handleConfigChange('sceneDescription', buildPictureRoomDescription(nextPrompts));
+  };
+
+  const handleAddPictureRoomPrompt = () => {
+    const nextPrompts = [...getPictureRoomPrompts(sessionConfig.sceneDescription), ''];
+    handleConfigChange('sceneDescription', buildPictureRoomDescription(nextPrompts));
+  };
+
+  const handleRemovePictureRoomPrompt = (index) => {
+    const nextPrompts = getPictureRoomPrompts(sessionConfig.sceneDescription).filter((_, promptIndex) => promptIndex !== index);
+    handleConfigChange('sceneDescription', buildPictureRoomDescription(nextPrompts.length > 0 ? nextPrompts : ['']));
   };
 
   const stopSceneDescriptionRecording = () => {
@@ -767,7 +754,7 @@ const SceneBuilder = () => {
               {isPictureRoomTemplate ? (
                 <div className="space-y-3">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    {pictureRoomPrompts.slice(0, visiblePromptsCount).map((prompt, index) => (
+                    {pictureRoomPrompts.map((prompt, index) => (
                       <div key={`picture-prompt-${index + 1}`}>
                         <div className="mb-1 flex items-center justify-between gap-2">
                           <label className="block text-xs font-semibold text-gray-600">
@@ -799,14 +786,10 @@ const SceneBuilder = () => {
                                 <FiMic className="h-3.5 w-3.5" />
                               )}
                             </button>
-                            {visiblePromptsCount > 1 && (
+                            {pictureRoomPrompts.length > 1 && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (visiblePromptsCount > 1) {
-                                    setVisiblePromptsCount(visiblePromptsCount - 1);
-                                  }
-                                }}
+                                onClick={() => handleRemovePictureRoomPrompt(index)}
                                 aria-label={`Remove picture ${index + 1} prompt`}
                                 title="Remove picture"
                                 className="inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 text-xs font-medium transition"
@@ -833,16 +816,14 @@ const SceneBuilder = () => {
                       </div>
                     ))}
                   </div>
-                  {visiblePromptsCount < 8 && (
-                    <button
-                      type="button"
-                      onClick={() => setVisiblePromptsCount(visiblePromptsCount + 1)}
-                      className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-primary-300 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-100 transition"
-                    >
-                      <FiPlus className="h-4 w-4" />
-                      Add Picture
-                    </button>
-                  )}
+                  <button
+                    type="button"
+                    onClick={handleAddPictureRoomPrompt}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-primary-300 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-100 transition"
+                  >
+                    <FiPlus className="h-4 w-4" />
+                    Add Picture
+                  </button>
                 </div>
               ) : (
               <textarea
@@ -864,7 +845,7 @@ const SceneBuilder = () => {
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 {isPictureRoomTemplate
-                  ? 'Fill all eight picture prompts. These prompts are included in the environment payload sent to Unity.'
+                  ? 'Fill the picture prompts you want included. These prompts are included in the environment payload sent to Unity.'
                   : 'This description guides AI scene generation while keeping the selected template.'}
               </p>
             </div>

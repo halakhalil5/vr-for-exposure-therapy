@@ -47,7 +47,7 @@ Scene builder base environments now normalize to the following Unity keys when `
 
 Picture Room notes:
 
-- Therapist description is sent as prompt lines for 8 pictures.
+- Therapist description is sent as prompt lines for the picture prompts used in that scene.
 
 Intensity sent to Unity is normalized to a 0.0-1.0 float. `0` stays `0.0`.
 

@@ -104,24 +104,47 @@ const normalizeEnvironmentForUnity = (environment) => {
   return UNITY_ENVIRONMENT_ALIASES[key] || key;
 };
 
-const resolveDescription = (sceneJSON = {}, freeText = '') => {
-  if (freeText && String(freeText).trim()) {
-    return String(freeText).trim();
+const normalizePictureRoomDescription = (description = '') => {
+  const lines = String(description || '').split(/\r?\n/);
+  const prompts = [];
+
+  lines.forEach((line) => {
+    const match = line.match(/^picture\s*(\d+)\s*prompt:\s*(.*)$/i);
+    if (!match) {
+      return;
+    }
+
+    const prompt = String(match[2] || '').trim();
+    if (prompt) {
+      prompts.push(prompt);
+    }
+  });
+
+  if (prompts.length === 0) {
+    return String(description || '').trim();
   }
 
-  if (sceneJSON?.freeText && String(sceneJSON.freeText).trim()) {
-    return String(sceneJSON.freeText).trim();
-  }
+  return prompts
+    .map((prompt, index) => `picture ${index + 1} prompt: ${prompt}`)
+    .join('\n');
+};
 
-  if (sceneJSON?.sceneDescription && String(sceneJSON.sceneDescription).trim()) {
-    return String(sceneJSON.sceneDescription).trim();
-  }
+const resolveDescription = (sceneJSON = {}, freeText = '', environment = '') => {
+  const isPictureRoom = normalizeEnvironmentForUnity(environment) === 'picture_room';
 
-  if (sceneJSON?.description && String(sceneJSON.description).trim()) {
-    return String(sceneJSON.description).trim();
-  }
+  const resolvedDescription = freeText && String(freeText).trim()
+    ? String(freeText).trim()
+    : sceneJSON?.freeText && String(sceneJSON.freeText).trim()
+      ? String(sceneJSON.freeText).trim()
+      : sceneJSON?.sceneDescription && String(sceneJSON.sceneDescription).trim()
+        ? String(sceneJSON.sceneDescription).trim()
+        : sceneJSON?.description && String(sceneJSON.description).trim()
+          ? String(sceneJSON.description).trim()
+          : '';
 
-  return '';
+  return isPictureRoom
+    ? normalizePictureRoomDescription(resolvedDescription)
+    : resolvedDescription;
 };
 
 // Build scene request matching spec format
@@ -133,7 +156,7 @@ const buildSceneRequest = (sceneJSON, intensity, freeText = '', maxIntensity = 1
 
   return {
     environment: normalizeEnvironmentForUnity(rawEnvironment),
-    freeText: resolveDescription(sceneJSON, freeText),
+    freeText: resolveDescription(sceneJSON, freeText, rawEnvironment),
     intensity: intensityFloat,
     // Include patient information if provided
     ...(sceneJSON.patientId && { patientId: sceneJSON.patientId }),
@@ -493,6 +516,7 @@ module.exports = {
   checkUnityHealth,
   mapIntensity,
   ENVIRONMENT_MAP,
+  normalizePictureRoomDescription,
   
   // Existing utilities (kept for backward compatibility)
   requestPreview,

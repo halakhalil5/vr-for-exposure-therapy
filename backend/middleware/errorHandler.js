@@ -62,9 +62,23 @@ const errorHandler = (err, req, res, next) => {
 
   // Handle file upload errors (Multer)
   if (err.code === 'LIMIT_FILE_SIZE') {
-    return res.status(400).json({
+    return res.status(413).json({
       error: 'File Too Large',
       message: 'The uploaded file exceeds the size limit'
+    });
+  }
+
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({
+      error: 'Invalid File Field',
+      message: 'Unexpected upload field. Use multipart/form-data field "pdf".'
+    });
+  }
+
+  if (err.code === 'INVALID_FILE_TYPE') {
+    return res.status(400).json({
+      error: 'Invalid File Type',
+      message: err.message || 'Only PDF files are allowed'
     });
   }
 

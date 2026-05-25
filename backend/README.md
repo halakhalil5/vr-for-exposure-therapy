@@ -16,6 +16,92 @@ CORS_ORIGINS=http://localhost:5173,http://localhost:3000,http://localhost:8080
 
 Do not commit secrets. Keep keys in environment variables only.
 
+## PDF Report Upload and Download
+
+Unity can upload therapeutic session PDFs with multipart/form-data to:
+
+- `POST /upload-pdf`
+
+Expected field name:
+
+- `pdf` (single file)
+
+Uploaded files are persisted to:
+
+- `backend/uploads/reports`
+
+Metadata is saved to MongoDB collection:
+
+- `reportuploads`
+
+### Additional Environment Variables
+
+- `PDF_MAX_FILE_SIZE_BYTES` (optional, default `10485760` = 10 MB)
+- `PUBLIC_API_BASE_URL` (optional, used to build absolute `fileUrl` and `downloadUrl`)
+
+Example:
+
+```bash
+PDF_MAX_FILE_SIZE_BYTES=10485760
+PUBLIC_API_BASE_URL=http://localhost:5000
+```
+
+### Endpoints
+
+- `POST /upload-pdf` - Upload one PDF session report
+- `GET /api/reports/uploads` - List uploaded PDF reports
+- `GET /api/reports/uploads/:reportId/download` - Download PDF by report ID
+
+### Example Upload (curl)
+
+```bash
+curl -X POST http://localhost:5000/upload-pdf \
+	-H "Content-Type: multipart/form-data" \
+	-F "pdf=@C:/path/to/session-report.pdf"
+```
+
+### Example Success Response
+
+```json
+{
+	"status": "success",
+	"message": "PDF report uploaded successfully",
+	"fileUrl": "http://localhost:5000/uploads/reports/7a0cc5be-bdb8-42af-859f-14f637ee41a6-session-report.pdf",
+	"downloadUrl": "http://localhost:5000/api/reports/uploads/7a0cc5be-bdb8-42af-859f-14f637ee41a6/download",
+	"reportId": "7a0cc5be-bdb8-42af-859f-14f637ee41a6",
+	"uploadedAt": "2026-05-25T10:15:30.120Z"
+}
+```
+
+### Example Error Responses
+
+Missing file:
+
+```json
+{
+	"error": "Error",
+	"message": "Missing file. Upload a PDF using multipart/form-data field \"pdf\"."
+}
+```
+
+Invalid file type:
+
+```json
+{
+	"error": "Invalid File Type",
+	"message": "Invalid file type. Only PDF files are allowed."
+}
+```
+
+File too large:
+
+```json
+{
+	"error": "File Too Large",
+	"message": "The uploaded file exceeds the size limit"
+}
+```
+
 ## Run Server
 
 ```bash

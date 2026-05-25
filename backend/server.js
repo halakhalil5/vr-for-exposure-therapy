@@ -16,6 +16,7 @@ const patientRoutes = require('./routes/patients');
 const sessionRoutes = require('./routes/sessions');
 const sceneRoutes = require('./routes/scenes');
 const reportRoutes = require('./routes/reports');
+const uploadPdfRoutes = require('./routes/uploadPdf');
 
 // Import error handling middleware
 const errorHandler = require('./middleware/errorHandler');
@@ -33,11 +34,22 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Configure CORS for frontend access
-const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5173'];
+const corsOrigins = process.env.CORS_ORIGINS?.split(',') || ['http://localhost:5173', 'http://localhost:3000'];
 app.use(cors({
-  origin: corsOrigins,
+  origin: (origin, callback) => {
+    // Allow server-to-server requests and native Unity clients with no browser origin.
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (corsOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked for origin: ${origin}`));
+  },
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS']
 }));
 
 // Serve static files from uploads directory (for preview images)
@@ -88,6 +100,9 @@ app.use('/api/sessions', sessionRoutes);
 
 // Scene generation and Unity communication routes
 app.use('/api', sceneRoutes);
+
+// Unity/React PDF upload route
+app.use('/', uploadPdfRoutes);
 
 // Report routes
 app.use('/api/reports', reportRoutes);

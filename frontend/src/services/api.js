@@ -313,6 +313,35 @@ export const reportAPI = {
   getSummary: async (params = {}) => {
     const response = await api.get('/reports/summary', { params });
     return response.data;
+  },
+
+  /**
+   * Upload PDF session report (Unity/React)
+   */
+  uploadPdf: async (formData) => {
+    const response = await axios.post('/upload-pdf', formData, {
+      timeout: 120000,
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+
+    return response.data;
+  },
+
+  /**
+   * List uploaded PDF reports
+   */
+  listUploadedReports: async (params = {}) => {
+    const response = await api.get('/reports/uploads', { params });
+    return response.data;
+  },
+
+  /**
+   * Build server download endpoint URL for a report
+   */
+  getDownloadUrl: (reportId) => {
+    return `/api/reports/uploads/${reportId}/download`;
   }
 };
 

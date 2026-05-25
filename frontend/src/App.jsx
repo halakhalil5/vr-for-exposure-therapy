@@ -13,6 +13,7 @@ import SessionManagement from './pages/SessionManagement';
 import SessionDetail from './pages/SessionDetail';
 import SceneBuilder from './pages/SceneBuilder';
 import Reports from './pages/Reports';
+import UploadedReports from './pages/UploadedReports';
 
 function App() {
   return (
@@ -38,6 +39,7 @@ function App() {
         {/* Reports */}
         <Route path="reports" element={<Reports />} />
         <Route path="reports/:patientId" element={<Reports />} />
+        <Route path="reports/files" element={<UploadedReports />} />
         
         {/* Catch-all redirect to dashboard */}
         <Route path="*" element={<Navigate to="/" replace />} />

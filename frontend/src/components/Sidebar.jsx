@@ -31,6 +31,7 @@ const Sidebar = ({ isOpen = false, onClose }) => {
       items: [
         { path: '/scene-builder', icon: FiBox, label: 'Scene Builder' },
         { path: '/reports', icon: FiBarChart2, label: 'Reports' },
+        { path: '/reports/files', icon: FiBarChart2, label: 'Session PDFs' },
       ]
     },
     {

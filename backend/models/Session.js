@@ -131,6 +131,7 @@ const sessionSchema = new mongoose.Schema({
       'rooftop',
       'cliff-edge',
       'glass-bridge',
+      'word-room',
       'building',
       'house',
       'cave',

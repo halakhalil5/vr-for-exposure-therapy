@@ -41,11 +41,11 @@ const SCENE_TEMPLATES = [
     recommendedForText: 'fear of heights'
   },
   {
-    id: 'glass-bridge',
-    name: 'Glass Bridge',
-    environment: 'cliff',
-    description: 'Elevated glass bridge with steep drop',
-    recommendedForText: 'fear of heights'
+    id: 'word-room',
+    name: 'Word Room',
+    environment: 'word_room',
+    description: 'Prompt-driven room where therapist text defines the word prompts',
+    recommendedForText: 'arachnophobia'
   },
   {
     id: 'elevator',

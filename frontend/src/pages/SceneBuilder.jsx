@@ -23,7 +23,7 @@ const TEMPLATE_TO_ENVIRONMENT = {
   airport: 'airport',
   airplane: 'airplane',
   building: 'building',
-  'glass-bridge': 'cliff',
+  'word-room': 'word_room',
   elevator: 'elevator',
   house: 'house',
   'picture-room': 'picture_room',
@@ -34,7 +34,7 @@ const ENVIRONMENT_TO_TEMPLATE = {
   airport: 'airport',
   airplane: 'airplane',
   building: 'building',
-  cliff: 'glass-bridge',
+  word_room: 'word-room',
   elevator: 'elevator',
   house: 'house',
   picture_room: 'picture-room',
@@ -43,8 +43,10 @@ const ENVIRONMENT_TO_TEMPLATE = {
   'indoor-room': 'house',
   'city-street': 'airport',
   rooftop: 'building',
-  'cliff-edge': 'glass-bridge',
-  cave: 'glass-bridge',
+  cliff: 'word-room',
+  'cliff-edge': 'word-room',
+  cave: 'word-room',
+  'glass-bridge': 'word-room',
   'picture-room': 'picture-room',
   bedroom: 'bedroom'
 };
@@ -89,6 +91,45 @@ const filterPictureRoomDescription = (description = '') => {
 
 const PICTURE_ROOM_PROMPT_TEMPLATE = buildPictureRoomDescription(['', '']);
 
+const buildWordRoomDescription = (prompts = []) => (
+  prompts.length > 0
+    ? prompts.map((prompt, index) => `word ${index + 1} prompt: ${prompt || ''}`.trimEnd()).join('\n')
+    : ''
+);
+
+const getWordRoomPrompts = (description = '') => {
+  const prompts = [];
+  const lines = String(description || '').split(/\r?\n/);
+
+  lines.forEach((line, fallbackIndex) => {
+    const match = line.match(/^word\s*(\d+)\s*prompt:\s*(.*)$/i);
+
+    if (match) {
+      const promptIndex = Number(match[1]) - 1;
+      if (promptIndex >= 0) {
+        prompts[promptIndex] = match[2];
+      }
+      return;
+    }
+
+    if (line.trim()) {
+      prompts[fallbackIndex] = line.trim();
+    }
+  });
+
+  return prompts.length > 0 ? prompts : [''];
+};
+
+const filterWordRoomDescription = (description = '') => {
+  const prompts = getWordRoomPrompts(description);
+  const filledPrompts = prompts.filter(p => p.trim());
+  return filledPrompts
+    .map((prompt, index) => `word ${index + 1} prompt: ${prompt}`)
+    .join('\n');
+};
+
+const WORD_ROOM_PROMPT_TEMPLATE = buildWordRoomDescription(['', '']);
+
 const SCENE_DESCRIPTION_SUGGESTIONS = {
   airport: [
     'Quiet airport check-in area with clear signage, a few distant passengers, visible exits, and soft announcement sounds.',
@@ -105,11 +146,16 @@ const SCENE_DESCRIPTION_SUGGESTIONS = {
     'Rooftop terrace with secure railings, city view at a moderate distance, stable flooring, and clear retreat points.',
     'Upper-floor hallway with large windows, soft indoor lighting, and optional steps closer to the view.'
   ],
-  'glass-bridge': [
-    'Glass bridge entrance with sturdy side rails, a visible stable platform behind the patient, and a mild view through the floor.',
-    'Mid-bridge scene with transparent panels, mountain or city depth below, calm wind audio, and wide secure railings.',
-    'Short elevated walkway with gradual transparency, clear end point ahead, and reduced motion to support controlled exposure.'
-  ],
+  'word-room': [
+  [
+    'word 1 prompt: spider',
+    'word 2 prompt: web'
+  ].join('\n'),
+  [
+    'word 1 prompt: spider',
+    'word 2 prompt: tarantula'
+  ].join('\n')
+],
   elevator: [
     'Small elevator cabin with soft lighting, visible floor buttons, gentle mechanical sound, and doors that remain responsive.',
     'Elevator ride between floors with minimal crowding, smooth movement, and a clear stop indicator above the doors.',
@@ -282,8 +328,10 @@ const SceneBuilder = () => {
       const sessionData = {
         patientId: selectedPatient,
         ...sessionConfig,
-        sceneDescription: isPictureRoomTemplate 
+        sceneDescription: isPictureRoomTemplate
           ? filterPictureRoomDescription(sessionConfig.sceneDescription)
+          : isWordRoomTemplate
+          ? filterWordRoomDescription(sessionConfig.sceneDescription)
           : sessionConfig.sceneDescription,
         sceneJSON,
         previewURL,
@@ -324,6 +372,8 @@ const SceneBuilder = () => {
 
     if (template.id === 'picture-room') {
       handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
+    } else if (template.id === 'word-room') {
+      handleConfigChange('sceneDescription', WORD_ROOM_PROMPT_TEMPLATE);
     } else {
       handleConfigChange('sceneDescription', '');
     }
@@ -350,6 +400,22 @@ const SceneBuilder = () => {
     handleConfigChange('sceneDescription', buildPictureRoomDescription(nextPrompts.length > 0 ? nextPrompts : ['']));
   };
 
+  const handleWordRoomPromptChange = (index, value) => {
+    const nextPrompts = getWordRoomPrompts(sessionConfig.sceneDescription);
+    nextPrompts[index] = value;
+    handleConfigChange('sceneDescription', buildWordRoomDescription(nextPrompts));
+  };
+
+  const handleAddWordRoomPrompt = () => {
+    const nextPrompts = [...getWordRoomPrompts(sessionConfig.sceneDescription), ''];
+    handleConfigChange('sceneDescription', buildWordRoomDescription(nextPrompts));
+  };
+
+  const handleRemoveWordRoomPrompt = (index) => {
+    const nextPrompts = getWordRoomPrompts(sessionConfig.sceneDescription).filter((_, promptIndex) => promptIndex !== index);
+    handleConfigChange('sceneDescription', buildWordRoomDescription(nextPrompts.length > 0 ? nextPrompts : ['']));
+  };
+
   const stopSceneDescriptionRecording = () => {
     const recorder = mediaRecorderRef.current;
     if (recorder?.state === 'recording') {
@@ -370,7 +436,7 @@ const SceneBuilder = () => {
 
     try {
       const recordingTarget = Number.isInteger(promptIndex)
-        ? { type: 'picturePrompt', index: promptIndex }
+        ? { type: sessionConfig.sceneTemplate === 'word-room' ? 'wordPrompt' : 'picturePrompt', index: promptIndex }
         : { type: 'description', index: null };
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
@@ -417,7 +483,11 @@ const SceneBuilder = () => {
 
         try {
           setIsTranscribingDescription(true);
-          setTranscribingPromptIndex(stoppedTarget.type === 'picturePrompt' ? stoppedTarget.index : null);
+          setTranscribingPromptIndex(
+            stoppedTarget.type === 'picturePrompt' || stoppedTarget.type === 'wordPrompt'
+              ? stoppedTarget.index
+              : null
+          );
           const response = await sceneAPI.speechToText(formData);
           const text = response?.text || response?.data?.text || '';
 
@@ -428,6 +498,8 @@ const SceneBuilder = () => {
 
           if (stoppedTarget.type === 'picturePrompt') {
             handlePictureRoomPromptChange(stoppedTarget.index, text.trim());
+          } else if (stoppedTarget.type === 'wordPrompt') {
+            handleWordRoomPromptChange(stoppedTarget.index, text.trim());
           } else {
             handleConfigChange('sceneDescription', text.trim());
           }
@@ -443,7 +515,11 @@ const SceneBuilder = () => {
 
       recorder.start();
       setIsRecordingDescription(true);
-      setRecordingPromptIndex(recordingTarget.type === 'picturePrompt' ? recordingTarget.index : null);
+      setRecordingPromptIndex(
+        recordingTarget.type === 'picturePrompt' || recordingTarget.type === 'wordPrompt'
+          ? recordingTarget.index
+          : null
+      );
       toast.success('Recording started');
     } catch (error) {
       console.error('Microphone permission error:', error);
@@ -458,7 +534,7 @@ const SceneBuilder = () => {
 
     if (isRecordingDescription) {
       const currentTarget = recordingTargetRef.current;
-      const isSamePicturePrompt = currentTarget.type === 'picturePrompt' && currentTarget.index === promptIndex;
+      const isSamePicturePrompt = (currentTarget.type === 'picturePrompt' || currentTarget.type === 'wordPrompt') && currentTarget.index === promptIndex;
       const isSameDescription = currentTarget.type === 'description' && promptIndex == null;
 
       if (isSamePicturePrompt || isSameDescription) {
@@ -482,8 +558,10 @@ const SceneBuilder = () => {
       
       const payload = {
         environment: sessionConfig.environment,
-        freeText: isPictureRoomTemplate 
+        freeText: isPictureRoomTemplate
           ? filterPictureRoomDescription(sessionConfig.sceneDescription)
+          : isWordRoomTemplate
+          ? filterWordRoomDescription(sessionConfig.sceneDescription)
           : sessionConfig.sceneDescription,
         intensity: sessionConfig.intensity,
         // Include patient information
@@ -517,8 +595,12 @@ const SceneBuilder = () => {
 
   const selectedPatientData = patients.find(patient => patient._id === selectedPatient);
   const isPictureRoomTemplate = sessionConfig.sceneTemplate === 'picture-room';
+  const isWordRoomTemplate = sessionConfig.sceneTemplate === 'word-room';
   const pictureRoomPrompts = isPictureRoomTemplate
     ? getPictureRoomPrompts(sessionConfig.sceneDescription)
+    : [];
+  const wordRoomPrompts = isWordRoomTemplate
+    ? getWordRoomPrompts(sessionConfig.sceneDescription)
     : [];
 
   return (
@@ -654,7 +736,7 @@ const SceneBuilder = () => {
         {/* Right Panel: Intensity, Description & Send to Unity Button */}
         <div className="space-y-6">
           {/* Intensity Slider */}
-          {!isPictureRoomTemplate && (
+          {!isPictureRoomTemplate && !isWordRoomTemplate && (
           <div className="card rounded-xl border border-gray-200 bg-gray-50 p-4 shadow-sm">
             <div className="flex items-start justify-between gap-4 mb-2">
               <div>
@@ -701,7 +783,7 @@ const SceneBuilder = () => {
                   >
                     Suggestions
                   </button>
-                  {!isPictureRoomTemplate && (
+                  {!isPictureRoomTemplate && !isWordRoomTemplate && (
                     <button
                       type="button"
                       onClick={() => handleSceneDescriptionRecordingToggle()}
@@ -825,27 +907,101 @@ const SceneBuilder = () => {
                     Add Picture
                   </button>
                 </div>
+              ) : isWordRoomTemplate ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {wordRoomPrompts.map((prompt, index) => (
+                      <div key={`word-prompt-${index + 1}`}>
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <label className="block text-xs font-semibold text-gray-600">
+                            Word {index + 1} prompt
+                          </label>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleSceneDescriptionRecordingToggle(index)}
+                              disabled={
+                                isTranscribingDescription ||
+                                (isRecordingDescription && recordingPromptIndex !== index)
+                              }
+                              aria-label={
+                                recordingPromptIndex === index
+                                  ? `Stop recording word ${index + 1} prompt`
+                                  : `Record word ${index + 1} prompt with microphone`
+                              }
+                              title={recordingPromptIndex === index ? 'Stop recording' : 'Record with microphone'}
+                              className={`inline-flex h-7 min-w-7 items-center justify-center rounded-md border text-xs font-medium transition ${
+                                recordingPromptIndex === index
+                                  ? 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100'
+                                  : 'border-gray-200 bg-gray-50 text-gray-700 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700'
+                              } disabled:cursor-not-allowed disabled:opacity-50`}
+                            >
+                              {recordingPromptIndex === index ? (
+                                <FiSquare className="h-3.5 w-3.5" />
+                              ) : (
+                                <FiMic className="h-3.5 w-3.5" />
+                              )}
+                            </button>
+                            {wordRoomPrompts.length > 1 && (
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveWordRoomPrompt(index)}
+                                aria-label={`Remove word ${index + 1} prompt`}
+                                title="Remove word"
+                                className="inline-flex h-7 min-w-7 items-center justify-center rounded-md border border-gray-200 bg-gray-50 text-gray-700 hover:border-red-200 hover:bg-red-50 hover:text-red-700 text-xs font-medium transition"
+                              >
+                                <FiX className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <textarea
+                          value={prompt}
+                          onChange={(e) => handleWordRoomPromptChange(index, e.target.value)}
+                          placeholder={`Enter word ${index + 1}...`}
+                          className="form-textarea h-20 w-full resize-none text-sm"
+                        />
+                        <div className="mt-1 min-h-4 text-xs font-medium">
+                          {recordingPromptIndex === index && (
+                            <span className="text-red-600">Recording...</span>
+                          )}
+                          {transcribingPromptIndex === index && (
+                            <span className="text-primary-700">Processing audio...</span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddWordRoomPrompt}
+                    className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-primary-300 bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:border-primary-400 hover:bg-primary-100 transition"
+                  >
+                    <FiPlus className="h-4 w-4" />
+                    Add Word
+                  </button>
+                </div>
               ) : (
               <textarea
                 value={sessionConfig.sceneDescription}
                 onChange={(e) => handleConfigChange('sceneDescription', e.target.value)}
-                placeholder={isPictureRoomTemplate
-                  ? PICTURE_ROOM_PROMPT_TEMPLATE
-                  : 'Describe the scene in detail for this patient and session intensity...\n\nExamples:\n• Start near the entrance with clear exits visible\n• Keep initial trigger distance moderate, then gradually reduce\n• Maintain calm ambient sounds and neutral lighting'}
+                placeholder="Describe the scene in detail for this patient and session intensity...\n\nExamples:\n• Start near the entrance with clear exits visible\n• Keep initial trigger distance moderate, then gradually reduce\n• Maintain calm ambient sounds and neutral lighting"
                 className="form-textarea w-full h-32 text-sm"
               />
               )}
               <div className="mt-2 min-h-5 text-xs font-medium">
-                {!isPictureRoomTemplate && isRecordingDescription && (
+                {!isPictureRoomTemplate && !isWordRoomTemplate && isRecordingDescription && (
                   <span className="text-red-600">Recording...</span>
                 )}
-                {!isPictureRoomTemplate && isTranscribingDescription && (
+                {!isPictureRoomTemplate && !isWordRoomTemplate && isTranscribingDescription && (
                   <span className="text-primary-700">Processing audio...</span>
                 )}
               </div>
               <p className="text-xs text-gray-500 mt-2">
                 {isPictureRoomTemplate
                   ? 'Fill the picture prompts you want included. These prompts are included in the environment payload sent to Unity.'
+                  : isWordRoomTemplate
+                  ? 'Fill the word prompts you want included. These prompts are included in the environment payload sent to Unity.'
                   : 'This description guides AI scene generation while keeping the selected template.'}
               </p>
             </div>

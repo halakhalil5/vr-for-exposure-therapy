@@ -203,13 +203,15 @@ const SceneBuilder = () => {
     intensity: 3,
     sceneTemplate: 'airport',
     environment: 'airport',
-    sceneDescription: ''
+    sceneDescription: '',
+    presentationMode: 'audio + text'
   });
   const [sceneJSON, setSceneJSON] = useState(null);
   const [previewURL, setPreviewURL] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isSendingToUnity, setIsSendingToUnity] = useState(false);
   const [showDescriptionSuggestions, setShowDescriptionSuggestions] = useState(false);
+  const [showWordSuggestions, setShowWordSuggestions] = useState(false);
   const [isRecordingDescription, setIsRecordingDescription] = useState(false);
   const [isTranscribingDescription, setIsTranscribingDescription] = useState(false);
   const [recordingPromptIndex, setRecordingPromptIndex] = useState(null);
@@ -260,7 +262,8 @@ const SceneBuilder = () => {
             intensity: session.intensity,
             sceneTemplate: template,
             environment: session.environment,
-            sceneDescription: session.sceneDescription || ''
+            sceneDescription: session.sceneDescription || '',
+            presentationMode: session.presentationMode || 'audio + text'
           });
           setSceneJSON(session.sceneJSON);
           setPreviewURL(session.previewURL);
@@ -328,6 +331,7 @@ const SceneBuilder = () => {
       const sessionData = {
         patientId: selectedPatient,
         ...sessionConfig,
+        presentationMode: sessionConfig.presentationMode,
         sceneDescription: isPictureRoomTemplate
           ? filterPictureRoomDescription(sessionConfig.sceneDescription)
           : isWordRoomTemplate
@@ -372,8 +376,10 @@ const SceneBuilder = () => {
 
     if (template.id === 'picture-room') {
       handleConfigChange('sceneDescription', PICTURE_ROOM_PROMPT_TEMPLATE);
+      handleConfigChange('presentationMode', 'audio + text');
     } else if (template.id === 'word-room') {
       handleConfigChange('sceneDescription', WORD_ROOM_PROMPT_TEMPLATE);
+      handleConfigChange('presentationMode', 'audio + text');
     } else {
       handleConfigChange('sceneDescription', '');
     }
@@ -564,6 +570,7 @@ const SceneBuilder = () => {
           ? filterWordRoomDescription(sessionConfig.sceneDescription)
           : sessionConfig.sceneDescription,
         intensity: sessionConfig.intensity,
+        presentationMode: sessionConfig.presentationMode,
         // Include patient information
         patientId: selectedPatient,
         patientName: patient?.name,
@@ -909,6 +916,59 @@ const SceneBuilder = () => {
                 </div>
               ) : isWordRoomTemplate ? (
                 <div className="space-y-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-3">
+                      <label className="block text-sm font-medium text-gray-700">Presentation Mode</label>
+                      <select
+                        value={sessionConfig.presentationMode}
+                        onChange={(e) => handleConfigChange('presentationMode', e.target.value)}
+                        className="form-select text-sm"
+                      >
+                        <option value="text only">Text only</option>
+                        <option value="audio only">Audio only</option>
+                        <option value="audio + text">Audio + text</option>
+                      </select>
+                    </div>
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => setShowWordSuggestions(prev => !prev)}
+                        className="text-xs font-semibold text-primary-700 hover:text-primary-800"
+                      >
+                        Suggestions
+                      </button>
+                    </div>
+                  </div>
+                  {showWordSuggestions && (
+                    <div className="mb-3 w-full max-w-md rounded-lg border border-gray-200 bg-white p-3 shadow">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-gray-900">Word room suggestions</p>
+                        <button
+                          type="button"
+                          onClick={() => setShowWordSuggestions(false)}
+                          className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                          aria-label="Close suggestions"
+                        >
+                          <FiX className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <div className="max-h-48 space-y-2 overflow-y-auto">
+                        {(SCENE_DESCRIPTION_SUGGESTIONS['word-room'] || []).map((suggestion, index) => (
+                          <button
+                            key={`word-suggestion-${index}`}
+                            type="button"
+                            onClick={() => {
+                              handleConfigChange('sceneDescription', suggestion);
+                              setShowWordSuggestions(false);
+                            }}
+                            className="w-full rounded-md border border-gray-100 bg-gray-50 px-3 py-2 text-left text-xs leading-5 text-gray-700 transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-800"
+                          >
+                            <pre className="whitespace-pre-wrap text-xs">{suggestion}</pre>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {wordRoomPrompts.map((prompt, index) => (
                       <div key={`word-prompt-${index + 1}`}>

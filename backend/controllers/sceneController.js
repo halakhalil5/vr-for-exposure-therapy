@@ -328,17 +328,18 @@ const receiveScenePreview = asyncHandler(async (req, res) => {
  * POST /api/build-scene
  */
 const buildScene = asyncHandler(async (req, res) => {
-  const { 
-    sessionId, 
-    sceneJSON, 
-    intensity, 
-    sceneDescription, 
-    environment, 
+  const {
+    sessionId,
+    sceneJSON,
+    intensity,
+    sceneDescription,
+    environment,
     freeText,
     description,
     patientId,
     patientName,
-    phobia
+    phobia,
+    presentationMode
   } = req.body;
 
   let sceneConfig = sceneJSON;
@@ -379,11 +380,11 @@ sourceEnvironment = environment || session.environment;
   const unitySceneConfig = {
     environment: sourceEnvironment,
     freeText: sourceFreeText,
-    // Include patient information in payload
     patientId,
     patientName,
     phobia,
-    intensity: sessionIntensity
+    intensity: sessionIntensity,
+    ...(presentationMode && { presentationMode })
   };
 
   try {

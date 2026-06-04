@@ -160,10 +160,10 @@ const buildSceneRequest = (sceneJSON, intensity, freeText = '', maxIntensity = 1
     environment: normalizeEnvironmentForUnity(rawEnvironment),
     freeText: resolveDescription(sceneJSON, freeText, rawEnvironment),
     intensity: intensityFloat,
-    // Include patient information if provided
     ...(sceneJSON.patientId && { patientId: sceneJSON.patientId }),
     ...(sceneJSON.patientName && { patientName: sceneJSON.patientName }),
-    ...(sceneJSON.phobia && { phobia: sceneJSON.phobia })
+    ...(sceneJSON.phobia && { phobia: sceneJSON.phobia }),
+    ...(sceneJSON.presentationMode && { presentationMode: sceneJSON.presentationMode })
   };
 };
 
